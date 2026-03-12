@@ -63,10 +63,20 @@ Open a new terminal after setup, then use these simple commands:
 autoac help
 autoac install-app
 autoac run -Debug
+autoac drive -Debug
 autoac run-neural -Debug
+autoac neural -Debug
 autoac collect
 autoac train -Epochs 30 -BatchSize 32
 autoac status
+autoac doctor
+autoac config-show
+autoac mode -Value keys
+autoac mode -Value vjoy
+autoac speed -TargetSpeed 70
+autoac logs
+autoac tail-state -Lines 40
+autoac update
 ```
 
 Install AC telemetry app files:
