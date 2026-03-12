@@ -38,6 +38,9 @@ irm https://raw.githubusercontent.com/CyberBrainiac1/SelfDriveBeamNGTech/main/sc
 
 After bootstrap finishes, launch Assetto Corsa and enable ACDriverApp in UI Modules.
 
+The bootstrap/setup scripts auto-detect the current Windows user via environment variables
+(`$env:USERNAME`, `$env:USERPROFILE`) so paths are user-specific automatically.
+
 ## Quick Start (Copy/Paste)
 
 Run these commands exactly, from any location (even `C:\WINDOWS\system32`):
@@ -68,6 +71,19 @@ Setup Python environment and dependencies:
 
 ```powershell
 .\scripts\setup_windows.ps1
+```
+
+This also registers a global `autoac` command in your PowerShell profile.
+Open a new terminal after setup, then use these simple commands:
+
+```powershell
+autoac help
+autoac install-app
+autoac run -Debug
+autoac run-neural -Debug
+autoac collect
+autoac train -Epochs 30 -BatchSize 32
+autoac status
 ```
 
 Install AC telemetry app files:

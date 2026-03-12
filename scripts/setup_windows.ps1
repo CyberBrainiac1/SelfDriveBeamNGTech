@@ -34,7 +34,12 @@ Write-Host "[setup] Installing dependencies ..."
 python -m pip install --upgrade pip
 pip install -r $requirementsPath
 
+if (Test-Path (Join-Path $repoRoot 'scripts\register_autoac_command.ps1')) {
+    Write-Host "[setup] Registering autoac command in PowerShell profile ..."
+    & .\scripts\register_autoac_command.ps1
+}
+
 Write-Host ""
 Write-Host "[setup] Done."
-Write-Host "[setup] Next: run .\scripts\install_ac_app.ps1"
-Write-Host "[setup] Then: run .\scripts\run_classical.ps1 -DebugView"
+Write-Host "[setup] Next: autoac install-app"
+Write-Host "[setup] Then: autoac run -Debug"

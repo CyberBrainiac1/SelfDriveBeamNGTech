@@ -51,6 +51,11 @@ Set-Location $repoPath
 Write-Host "[bootstrap] Running setup_windows.ps1 ..."
 & .\scripts\setup_windows.ps1
 
+if (Test-Path .\scripts\register_autoac_command.ps1) {
+    Write-Host "[bootstrap] Registering autoac command ..."
+    & .\scripts\register_autoac_command.ps1
+}
+
 if ($InstallAcApp) {
     Write-Host "[bootstrap] Installing AC app files ..."
     & .\scripts\install_ac_app.ps1
@@ -60,4 +65,5 @@ Write-Host ""
 Write-Host "[bootstrap] Done."
 Write-Host "[bootstrap] Next steps:"
 Write-Host "  1) Start Assetto Corsa and enable ACDriverApp in UI Modules"
-Write-Host "  2) Run: .\scripts\run_classical.ps1 -DebugView"
+Write-Host "  2) Open a new PowerShell window"
+Write-Host "  3) Run: autoac run -Debug"
