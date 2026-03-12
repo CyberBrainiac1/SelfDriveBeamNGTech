@@ -12,7 +12,7 @@ param(
     [string]$Command = 'help',
 
     [double]$TargetSpeed,
-    [switch]$Debug,
+    [switch]$DebugView,
     [int]$Epochs = 30,
     [int]$BatchSize = 32,
     [switch]$RecreateVenv,
@@ -86,10 +86,10 @@ switch ($Command) {
         Write-Host '  autoac register-command           # register global autoac command in PowerShell profile'
         Write-Host ''
         Write-Host 'Run:'
-        Write-Host '  autoac run -Debug                # run classical mode'
-        Write-Host '  autoac drive -Debug              # alias for run'
-        Write-Host '  autoac run-neural -Debug         # run neural mode'
-        Write-Host '  autoac neural -Debug             # alias for run-neural'
+        Write-Host '  autoac run -DebugView            # run classical mode'
+        Write-Host '  autoac drive -DebugView          # alias for run'
+        Write-Host '  autoac run-neural -DebugView     # run neural mode'
+        Write-Host '  autoac neural -DebugView         # alias for run-neural'
         Write-Host ''
         Write-Host 'Training:'
         Write-Host '  autoac collect                   # collect data'
@@ -122,28 +122,28 @@ switch ($Command) {
     }
     'run' {
         $args = @()
-        if ($Debug) { $args += '-DebugView' }
+        if ($DebugView) { $args += '-DebugView' }
         if ($PSBoundParameters.ContainsKey('TargetSpeed')) { $args += @('-TargetSpeed', $TargetSpeed) }
         & .\scripts\run_classical.ps1 @args
         break
     }
     'drive' {
         $args = @()
-        if ($Debug) { $args += '-DebugView' }
+        if ($DebugView) { $args += '-DebugView' }
         if ($PSBoundParameters.ContainsKey('TargetSpeed')) { $args += @('-TargetSpeed', $TargetSpeed) }
         & .\scripts\run_classical.ps1 @args
         break
     }
     'run-neural' {
         $args = @()
-        if ($Debug) { $args += '-DebugView' }
+        if ($DebugView) { $args += '-DebugView' }
         if ($PSBoundParameters.ContainsKey('TargetSpeed')) { $args += @('-TargetSpeed', $TargetSpeed) }
         & .\scripts\run_neural.ps1 @args
         break
     }
     'neural' {
         $args = @()
-        if ($Debug) { $args += '-DebugView' }
+        if ($DebugView) { $args += '-DebugView' }
         if ($PSBoundParameters.ContainsKey('TargetSpeed')) { $args += @('-TargetSpeed', $TargetSpeed) }
         & .\scripts\run_neural.ps1 @args
         break

@@ -32,7 +32,7 @@ function Install-Launcher([string]$targetDir, [string]$dispatcherPath) {
 
     $cmdLauncher = Join-Path $targetDir 'autoac.cmd'
     $cmdText = "@echo off`r`n" +
-               "powershell -NoProfile -ExecutionPolicy Bypass -File \"$dispatcherPath\" %*`r`n"
+               "powershell -NoProfile -ExecutionPolicy Bypass -File `"$dispatcherPath`" %*`r`n"
     Set-Content -Path $cmdLauncher -Value $cmdText -Encoding ASCII
 
     $ps1Launcher = Join-Path $targetDir 'autoac.ps1'

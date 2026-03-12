@@ -53,4 +53,4 @@ if (Test-Path (Join-Path $repoRoot 'scripts\register_autoac_command.ps1')) {
 Write-Host ""
 Write-Host "[setup] Done."
 Write-Host "[setup] Next: autoac install-app"
-Write-Host "[setup] Then: autoac run -Debug"
+Write-Host "[setup] Then: autoac run -DebugView"
