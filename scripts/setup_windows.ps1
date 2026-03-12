@@ -7,6 +7,17 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $venvPath = Join-Path $repoRoot '.venv'
 $requirementsPath = Join-Path $repoRoot 'requirements.txt'
 
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    if (Test-Path (Join-Path $repoRoot 'scripts\install_python.ps1')) {
+        Write-Host "[setup] Python not found. Installing automatically ..."
+        & .\scripts\install_python.ps1
+    }
+}
+
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    throw "Python is still not available. Reopen terminal and rerun .\scripts\setup_windows.ps1"
+}
+
 Write-Host "[setup] Repository root: $repoRoot"
 Set-Location $repoRoot
 

@@ -9,14 +9,14 @@ but Assetto Corsa is now the default and primary stack.
 
 1. Install Steam
 2. Buy/install Assetto Corsa
-3. Install Python 3.9+ and check "Add Python to PATH"
+3. Install Git for Windows: https://git-scm.com/download/win
 4. Launch Assetto Corsa once so this folder exists:
 
 ```text
 %USERPROFILE%\Documents\Assetto Corsa\
 ```
 
-5. Install Git for Windows: https://git-scm.com/download/win
+Python can now be installed automatically by bootstrap/setup scripts (via winget).
 
 ## Fresh Machine (No Repo Cloned Yet)
 
@@ -37,6 +37,8 @@ irm https://raw.githubusercontent.com/CyberBrainiac1/SelfDriveBeamNGTech/main/sc
 ```
 
 After bootstrap finishes, launch Assetto Corsa and enable ACDriverApp in UI Modules.
+
+If Python is missing, bootstrap auto-installs it for the current user.
 
 The bootstrap/setup scripts auto-detect the current Windows user via environment variables
 (`$env:USERNAME`, `$env:USERPROFILE`) so paths are user-specific automatically.
@@ -72,6 +74,8 @@ Setup Python environment and dependencies:
 ```powershell
 .\scripts\setup_windows.ps1
 ```
+
+If Python is missing, setup will auto-install it first.
 
 This also registers a global `autoac` command in your PowerShell profile.
 Open a new terminal after setup, then use these simple commands:

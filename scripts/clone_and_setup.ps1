@@ -30,10 +30,6 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw "Git is not installed. Install Git for Windows first: https://git-scm.com/download/win"
 }
 
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    throw "Python is not installed or not in PATH. Install Python 3.9+: https://www.python.org/downloads/"
-}
-
 if (-not (Test-Path $InstallRoot)) {
     Write-Host "[bootstrap] Creating install root ..."
     New-Item -ItemType Directory -Force $InstallRoot | Out-Null
@@ -48,6 +44,18 @@ if (-not (Test-Path $repoPath)) {
 }
 
 Set-Location $repoPath
+
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    if (Test-Path .\scripts\install_python.ps1) {
+        Write-Host "[bootstrap] Python not found. Installing automatically ..."
+        & .\scripts\install_python.ps1
+    }
+}
+
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    throw "Python is still not available. Open a new terminal and rerun bootstrap."
+}
+
 Write-Host "[bootstrap] Running setup_windows.ps1 ..."
 & .\scripts\setup_windows.ps1
 
