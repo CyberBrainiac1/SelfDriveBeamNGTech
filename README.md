@@ -16,6 +16,28 @@ but Assetto Corsa is now the default and primary stack.
 %USERPROFILE%\Documents\Assetto Corsa\
 ```
 
+5. Install Git for Windows: https://git-scm.com/download/win
+
+## Fresh Machine (No Repo Cloned Yet)
+
+If the user does not have this repository yet, run one of these from PowerShell.
+
+Option A (recommended for most users, no admin): clone under user profile
+
+```powershell
+irm https://raw.githubusercontent.com/CyberBrainiac1/SelfDriveBeamNGTech/main/scripts/clone_and_setup.ps1 -OutFile "$env:TEMP\clone_and_setup.ps1"
+& "$env:TEMP\clone_and_setup.ps1" -InstallRoot "$env:USERPROFILE\SelfDrive" -InstallAcApp
+```
+
+Option B (admin): clone under Program Files
+
+```powershell
+irm https://raw.githubusercontent.com/CyberBrainiac1/SelfDriveBeamNGTech/main/scripts/clone_and_setup.ps1 -OutFile "$env:TEMP\clone_and_setup.ps1"
+& "$env:TEMP\clone_and_setup.ps1" -InstallRoot "$env:ProgramFiles\SelfDrive" -InstallAcApp
+```
+
+After bootstrap finishes, launch Assetto Corsa and enable ACDriverApp in UI Modules.
+
 ## Quick Start (Copy/Paste)
 
 Run these commands exactly, from any location (even `C:\WINDOWS\system32`):
