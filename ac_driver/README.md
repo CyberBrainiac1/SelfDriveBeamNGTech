@@ -6,6 +6,22 @@ This is a full autonomous driving stack for Assetto Corsa with:
 - Neural mode: NVIDIA-style CNN steering model
 - Control output: vJoy analog (recommended) or keyboard fallback
 
+## Start Here If You Do Not Have Assetto Corsa Installed
+
+If this is your first time, do these first:
+
+1. Install Steam
+2. Buy/install Assetto Corsa (Ultimate Edition recommended so you have more tracks/cars)
+3. Launch the game once from Steam so it creates:
+
+```text
+%USERPROFILE%\Documents\Assetto Corsa\
+```
+
+4. In video settings, run in a fixed resolution (for easier capture-region setup)
+
+After that, continue with Fast Start below.
+
 ## Fast Start (Exact Steps)
 
 Follow these in order with no skips.
@@ -14,6 +30,19 @@ Follow these in order with no skips.
 
 ```powershell
 cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
+```
+
+Create and activate a virtual environment:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+If activation is blocked, run once:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```
 
 ### 2. Install Python dependencies
@@ -43,6 +72,14 @@ Result should be:
 %USERPROFILE%\Documents\Assetto Corsa\apps\python\ACDriverApp\ui\ACDriverApp.ini
 ```
 
+Quick verification command:
+
+```powershell
+Test-Path "$env:USERPROFILE\Documents\Assetto Corsa\apps\python\ACDriverApp\ACDriverApp.py"
+```
+
+It should print `True`.
+
 ### 4. Enable ACDriverApp in Assetto Corsa
 
 In game:
@@ -51,6 +88,12 @@ In game:
 2. Go to Options -> General -> UI Modules
 3. Enable ACDriverApp
 4. Start a practice session and drive once to confirm telemetry updates
+
+After driving for a few seconds, verify telemetry file exists:
+
+```powershell
+Test-Path "$env:USERPROFILE\Documents\Assetto Corsa\logs\acdriver_state.json"
+```
 
 ### 5. Choose control mode (important)
 
@@ -96,6 +139,15 @@ What success looks like:
 - Car starts steering and throttle/brake control automatically
 
 Stop with `Ctrl+C` or press `q` in debug window.
+
+## First-Day Checklist
+
+- Assetto Corsa installed and launched once
+- ACDriverApp copied into `Documents\Assetto Corsa\apps\python\`
+- ACDriverApp enabled in UI Modules
+- `acdriver_state.json` file appears while driving
+- `mode` in [ac_driver/config.py](ac_driver/config.py) is set correctly (`keys` first run is easiest)
+- `monitor_region` matches your actual game window
 
 ## Neural Mode (Train Your Own Model)
 
