@@ -1,216 +1,187 @@
-# AC Driver
+# AC Driver (Assetto Corsa Autonomy)
 
-An autonomous driving system for **Assetto Corsa** built from scratch in Python.
+This is a full autonomous driving stack for Assetto Corsa with:
+- Classical mode: OpenCV lane detection + PID
+- Neural mode: NVIDIA-style CNN steering model
+- Control output: vJoy analog (recommended) or keyboard fallback
 
-Inspired by [denfed/ACDriver](https://github.com/denfed/ACDriver) and the architecture of [learn-to-race/l2r](https://github.com/learn-to-race/l2r). All bugs from the original ACDriver have been fixed; the codebase is entirely original.
+## Fast Start (Exact Steps)
 
----
+Follow these in order with no skips.
 
-## How it works
+### 1. Open terminal in repo root
 
-```
-Screen capture ──► Agent ──► ControlArbiter ──► Game input
-                    ↑              ↓
-             AC telemetry    vJoy / WASD
-                    ↓
-              LapTracker  →  MetricsLogger
-```
-
-Two driving modes:
-
-| Mode | How it steers | Needs model? |
-|------|--------------|-------------|
-| `classical` | OpenCV lane detection → PID | No |
-| `neural` | NVIDIA CNN end-to-end | Yes (train first) |
-
-Both modes use a **PID speed controller** and the same **LapTracker / MetricsLogger** pipeline.
-
----
-
-## Architecture
-
-```
-ac_driver/
-├── config.py                  # all tunables in one place
-├── main.py                    # main loop
-│
-├── ac_app/ACDriverApp/        # in-game Python app (runs inside AC)
-│   └── ACDriverApp.py         # writes JSON telemetry
-│
-├── agents/                    # l2r-style abstract agent interface
-│   ├── base_agent.py          # AbstractAgent + Observation dataclass
-│   ├── classical_agent.py     # lane detection + PID
-│   └── neural_agent.py        # NVIDIA CNN steering
-│
-├── capture/
-│   ├── screen_capture.py      # mss screen grabber
-│   └── ac_state_reader.py     # reads telemetry JSON
-│
-├── perception/
-│   └── lane_detection.py      # HSV mask → Canny → Hough → offset
-│
-├── control/
-│   ├── direct_keys.py         # DirectInput WASD fallback
-│   ├── vjoy_output.py         # vJoy analog axes (preferred)
-│   ├── steering_controller.py # PID steering
-│   ├── speed_controller.py    # PID speed → throttle/brake
-│   └── control_arbiter.py     # merges outputs, picks vJoy or keys
-│
-├── training/
-│   ├── data_collector.py      # record frames + AC steering labels
-│   ├── model.py               # NVIDIA CNN (TF2/Keras)
-│   ├── train_model.py         # train with augmentation + callbacks
-│   └── infer.py               # SteeringPredictor class
-│
-├── track/
-│   └── lap_tracker.py         # lap times, stuck/wrong-way, reward signal
-│                              # (l2r GranTurismo reward + log-jerk metric)
-│
-├── utils/
-│   ├── debug_overlay.py       # HUD overlay
-│   ├── metrics_logger.py      # CSV logging, lap summaries
-│   ├── timers.py              # RateLimiter, FPSCounter
-│   └── image_utils.py         # image helpers
-│
-├── scripts/
-│   ├── collect_data.py        # record training data
-│   ├── train.py               # train the CNN
-│   ├── run_classical.py       # drive (classical mode)
-│   └── run_neural.py          # drive (neural mode)
-│
-└── tests/
-    ├── test_lane_detection.py
-    └── test_controllers.py
+```powershell
+cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
 ```
 
----
+### 2. Install Python dependencies
 
-## Setup
-
-### 1 — Install Python dependencies
-
-```bash
-cd ac_driver
-pip install -r requirements.txt
+```powershell
+pip install -r ac_driver\requirements.txt
 ```
 
-For smooth **analog steering** (recommended), also install vJoy:
-- Download from https://github.com/jshafer817/vJoy/releases
-- Run `vJoyConf.exe` → device 1 → enable axes X, Y, Z
-- Then in `config.py` set `control_out.mode = "vjoy"`
+### 3. Install the AC in-game telemetry app
 
-### 2 — Install the in-game app
+Copy this folder:
 
-Copy the app folder into Assetto Corsa:
-
-```
-ac_app\ACDriverApp\  →  Documents\Assetto Corsa\apps\python\ACDriverApp\
+```text
+ac_driver\ac_app\ACDriverApp\
 ```
 
-Launch AC, go to **Options → General → UI Modules** and enable **ACDriverApp**.
+Into this folder:
 
-### 3 — Configure AC inputs
+```text
+%USERPROFILE%\Documents\Assetto Corsa\apps\python\ACDriverApp\
+```
 
-If using **vJoy**: go to AC Controls → map Steering/Gas/Brake from the vJoy device axes.
+Result should be:
 
-If using **WASD keys**: AC's keyboard bindings should already handle W/A/S/D.
+```text
+%USERPROFILE%\Documents\Assetto Corsa\apps\python\ACDriverApp\ACDriverApp.py
+%USERPROFILE%\Documents\Assetto Corsa\apps\python\ACDriverApp\ui\ACDriverApp.ini
+```
 
-### 4 — Adjust `config.py`
+### 4. Enable ACDriverApp in Assetto Corsa
 
-Key settings to check before running:
+In game:
+1. Open Assetto Corsa
+2. Go to Options -> General -> UI Modules
+3. Enable ACDriverApp
+4. Start a practice session and drive once to confirm telemetry updates
+
+### 5. Choose control mode (important)
+
+Edit [ac_driver/config.py](ac_driver/config.py):
+
+- For easiest first run, keep:
 
 ```python
-# Screen region to capture (left, top, width, height)
-monitor_region: (0, 40, 1920, 1080)   # adjust for your resolution/windowed mode
-
-# Target cruise speed
-target_kph: 60.0
-
-# Control mode
-mode: "keys"   # or "vjoy" if you installed the driver
+mode = "keys"
 ```
 
----
+- For smooth steering (recommended), install vJoy and set:
 
-## Running
-
-### Classical mode (no training needed)
-
-```bash
-python ac_driver/main.py --mode classical --debug
-# or via shortcut:
-python ac_driver/scripts/run_classical.py --debug
+```python
+mode = "vjoy"
 ```
 
-### Neural mode
+If using vJoy:
+1. Install vJoy from https://github.com/jshafer817/vJoy/releases
+2. Open vJoyConf and enable axes X, Y, Z on device 1
+3. In AC Controls, bind steering/throttle/brake to vJoy axes
 
-First collect training data (drive a few laps manually with AC open):
+### 6. Set your capture region
 
-```bash
-python ac_driver/scripts/collect_data.py
+In [ac_driver/config.py](ac_driver/config.py), set `monitor_region` to your AC window.
+
+Examples:
+- 1920x1080 fullscreen: `(0, 40, 1920, 1080)`
+- 800x600 windowed: `(0, 40, 800, 600)`
+
+### 7. Run first autonomous drive (no training required)
+
+```powershell
+python ac_driver\main.py --mode classical --debug
 ```
 
-Then train the model:
+What success looks like:
+- Terminal prints FPS/speed/steer/reward
+- Debug window opens
+- Car starts steering and throttle/brake control automatically
 
-```bash
-python ac_driver/scripts/train.py --epochs 30
+Stop with `Ctrl+C` or press `q` in debug window.
+
+## Neural Mode (Train Your Own Model)
+
+### 1. Collect data (you drive manually)
+
+```powershell
+python ac_driver\scripts\collect_data.py
 ```
 
-Then run:
+Press `q` when done. Data shards are saved under `ac_driver\data\`.
 
-```bash
-python ac_driver/main.py --mode neural --debug
-# or:
-python ac_driver/scripts/run_neural.py
+### 2. Train model
+
+```powershell
+python ac_driver\scripts\train.py --epochs 30 --batch-size 32
 ```
 
----
+Model is saved to:
 
-## Metrics (l2r-inspired)
-
-After each lap the terminal prints a summary:
-
-```
-────────────────────────────────────────────────
-  LAP 1 COMPLETE
-────────────────────────────────────────────────
-  Time        : 87.43 s
-  Avg speed   : 62.1 kph
-  Infractions : 0
-  Smoothness  : -4.2312   (more negative = smoother)
-  Avg |steer| : 0.0841
-────────────────────────────────────────────────
+```text
+ac_driver\models\acdriver_model.keras
 ```
 
-Full per-tick and per-lap CSV logs are saved to `logs/`.
+### 3. Run neural driving
 
-The **movement smoothness** metric is the log-dimensionless jerk score from Balasubramanian (2012), using the same formula as `learn-to-race/l2r`'s `ProgressTracker`.
-The **progress reward** per tick is `Δspline_position × 100`, matching l2r's GranTurismo reward structure.
+```powershell
+python ac_driver\main.py --mode neural --debug
+```
 
----
+## Daily Use (Short Commands)
 
-## Fixes vs original ACDriver
+Classical:
 
-| Bug in original | Fix |
-|---|---|
-| `keras.optimizers.adam()` (broken TF2) | `keras.optimizers.Adam()` |
-| `categorical_crossentropy` on regression | `mse` loss |
-| `Dense(3, tanh)` for 3-class output | `Dense(1, tanh)` single steering value |
-| Hardcoded `C:\Users\denni\...` paths | `os.path.expanduser("~")` + config |
-| PIL.ImageGrab (slow) | mss |
-| Object-array `.npy` files | Structured `.npz` shards |
-| Steering `(deg+450)/900` → 0…1 | `deg/450` → -1…+1 |
-| Incomplete AC app (5 lines) | Full `acMain/acUpdate/acShutdown` |
-| WASD only (digital) | vJoy primary + WASD fallback |
-| No lap tracking / metrics | `LapTracker` + `MetricsLogger` |
+```powershell
+python ac_driver\scripts\run_classical.py --debug
+```
 
----
+Neural:
 
-## Tests
+```powershell
+python ac_driver\scripts\run_neural.py --debug
+```
 
-```bash
+## Logs and Metrics
+
+- Tick CSV and lap CSV are written to `ac_driver\logs\`
+- Lap summary includes:
+  - lap time
+  - average speed
+  - infractions
+  - smoothness (log-dimensionless jerk)
+
+## Troubleshooting
+
+### No telemetry / timed out waiting for AC
+
+Check:
+1. ACDriverApp is enabled in UI Modules
+2. You are in an active track session (not only menu)
+3. File exists and updates:
+
+```text
+%USERPROFILE%\Documents\Assetto Corsa\logs\acdriver_state.json
+```
+
+### Car does not steer correctly
+
+Check:
+1. `monitor_region` matches your game window
+2. Correct control mode (`keys` or `vjoy`) in [ac_driver/config.py](ac_driver/config.py)
+3. For vJoy, axis mappings are done in AC Controls
+
+### Neural mode says model not found
+
+Run training first:
+
+```powershell
+python ac_driver\scripts\train.py
+```
+
+## Optional: Run tests
+
+```powershell
 cd ac_driver
-pytest tests/ -v
+pytest tests -v
 ```
 
-Tests run without Assetto Corsa open — they use synthetic frames.
+## Project Layout
+
+- [ac_driver/main.py](ac_driver/main.py): runtime loop
+- [ac_driver/config.py](ac_driver/config.py): all settings
+- [ac_driver/agents/base_agent.py](ac_driver/agents/base_agent.py): abstract agent interface
+- [ac_driver/track/lap_tracker.py](ac_driver/track/lap_tracker.py): l2r-inspired progress/lap tracking
+- [ac_driver/utils/metrics_logger.py](ac_driver/utils/metrics_logger.py): CSV metrics
