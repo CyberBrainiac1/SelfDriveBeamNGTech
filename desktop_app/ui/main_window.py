@@ -1,16 +1,15 @@
 """
-desktop_app/ui/main_window.py — Main application window with left sidebar navigation.
+desktop_app/ui/main_window.py — Main window: left sidebar + stacked pages.
+Simple: compact sidebar, no toolbar clutter.
 """
 import os
 import sys
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QListWidgetItem, QStackedWidget, QLabel,
-    QFrame, QSizePolicy, QStatusBar
+    QFrame, QStatusBar
 )
-from PySide6.QtCore import Qt, QSize, QTimer
-from PySide6.QtGui import QFont, QIcon
-
+from PySide6.QtCore import Qt, QSize
 from ui.styles import DARK_STYLESHEET, COLORS
 from pages.dashboard import DashboardPage
 from pages.normal_wheel_page import NormalWheelPage
@@ -23,28 +22,23 @@ from pages.settings_page import SettingsPage
 from pages.logs_page import LogsPage
 
 
-# Navigation items: (display_name, icon_text, page_key)
-NAV_ITEMS = [
-    ("Dashboard",           "⬡",  "dashboard"),
-    ("Normal Wheel Mode",   "🎮",  "normal_wheel"),
-    ("Tuning",              "⚙",  "tuning"),
-    ("Calibration",         "✦",  "calibration"),
-    ("Tests & Diagnostics", "🔬",  "tests_diag"),
-    None,  # separator
-    ("BeamNG.tech AI Mode", "🤖",  "beamng_ai"),
-    None,  # separator
-    ("Profiles",            "📁",  "profiles"),
-    ("Settings",            "☰",  "settings"),
-    ("Logs",                "📋",  "logs"),
+# (display label, page key)  — None = thin separator
+NAV = [
+    ("Dashboard",           "dashboard"),
+    ("Normal Wheel Mode",   "normal_wheel"),
+    ("Tuning",              "tuning"),
+    ("Calibration",         "calibration"),
+    ("Tests & Diagnostics", "tests_diag"),
+    None,
+    ("BeamNG.tech AI Mode", "beamng_ai"),
+    None,
+    ("Profiles",            "profiles"),
+    ("Settings",            "settings"),
+    ("Logs",                "logs"),
 ]
 
 
 class MainWindow(QMainWindow):
-    """
-    Main application window.
-    Left sidebar for navigation, right stacked widget for page content.
-    """
-
     def __init__(self, serial, config, logger, safety, telemetry,
                  beamng_manager, profiles):
         super().__init__()
@@ -56,229 +50,171 @@ class MainWindow(QMainWindow):
         self._beamng_manager = beamng_manager
         self._profiles = profiles
 
-        self.setWindowTitle("SelfDriveBeamNGTech — Wheel Control System")
-        self.setMinimumSize(1200, 750)
-        self.resize(1400, 850)
+        self.setWindowTitle("SelfDriveBeamNGTech")
+        self.setMinimumSize(960, 620)
+        self.resize(1200, 760)
         self.setStyleSheet(DARK_STYLESHEET)
-
-        self._build_ui()
+        self._build()
         self._connect_signals()
-        self._update_status_bar()
+        self._nav.setCurrentRow(0)
 
-    def _build_ui(self):
-        central = QWidget()
-        self.setCentralWidget(central)
-        root_layout = QHBoxLayout(central)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.setSpacing(0)
+    def _build(self):
+        root = QWidget()
+        self.setCentralWidget(root)
+        h = QHBoxLayout(root)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
 
-        # ---- Sidebar ----
-        sidebar = self._build_sidebar()
-        root_layout.addWidget(sidebar)
+        # Sidebar
+        h.addWidget(self._build_sidebar())
 
-        # ---- Vertical divider ----
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.VLine)
-        divider.setFixedWidth(1)
-        divider.setStyleSheet(f"background-color: {COLORS['border']};")
-        root_layout.addWidget(divider)
+        # Divider
+        div = QFrame()
+        div.setFixedWidth(1)
+        div.setStyleSheet(f"background:{COLORS['border']};")
+        h.addWidget(div)
 
-        # ---- Page area ----
+        # Pages
         self._stack = QStackedWidget()
-        self._stack.setContentsMargins(0, 0, 0, 0)
-        root_layout.addWidget(self._stack, 1)
+        h.addWidget(self._stack, 1)
 
-        # ---- Build pages ----
-        page_args = dict(
-            serial=self._serial,
-            config=self._config,
-            logger=self._log,
-            safety=self._safety,
-            telemetry=self._telemetry,
-        )
+        kw = dict(serial=self._serial, config=self._config, logger=self._log,
+                  safety=self._safety, telemetry=self._telemetry)
         self._pages = {
-            "dashboard":    DashboardPage(**page_args, beamng_manager=self._beamng_manager, profiles=self._profiles),
-            "normal_wheel": NormalWheelPage(**page_args),
-            "tuning":       TuningPage(**page_args),
-            "calibration":  CalibrationPage(**page_args),
-            "tests_diag":   TestsDiagnosticsPage(**page_args),
-            "beamng_ai":    BeamNGAIPage(**page_args, beamng_manager=self._beamng_manager),
-            "profiles":     ProfilesPage(**page_args, profiles=self._profiles),
-            "settings":     SettingsPage(**page_args),
-            "logs":         LogsPage(**page_args),
+            "dashboard":    DashboardPage(**kw, beamng_manager=self._beamng_manager, profiles=self._profiles),
+            "normal_wheel": NormalWheelPage(**kw),
+            "tuning":       TuningPage(**kw),
+            "calibration":  CalibrationPage(**kw),
+            "tests_diag":   TestsDiagnosticsPage(**kw),
+            "beamng_ai":    BeamNGAIPage(**kw, beamng_manager=self._beamng_manager),
+            "profiles":     ProfilesPage(**kw, profiles=self._profiles),
+            "settings":     SettingsPage(**kw),
+            "logs":         LogsPage(**kw),
         }
-
-        self._page_index = {}
+        self._page_idx = {}
         for key, page in self._pages.items():
-            idx = self._stack.addWidget(page)
-            self._page_index[key] = idx
+            self._page_idx[key] = self._stack.addWidget(page)
 
-        # ---- Status bar ----
-        self._status_bar = QStatusBar()
-        self._status_bar.setFixedHeight(28)
-        self._status_bar.setStyleSheet(
-            f"QStatusBar {{ background-color: {COLORS['bg_panel']}; "
-            f"color: {COLORS['text_secondary']}; "
-            f"border-top: 1px solid {COLORS['border']}; "
-            f"font-size: 11px; padding: 0 8px; }}"
+        # Status bar
+        sb = QStatusBar()
+        sb.setFixedHeight(24)
+        sb.setStyleSheet(
+            f"QStatusBar{{background:{COLORS['bg_panel']};"
+            f"color:{COLORS['text_secondary']};"
+            f"border-top:1px solid {COLORS['border']};"
+            f"font-size:11px;padding:0 8px;}}"
         )
-        self.setStatusBar(self._status_bar)
-
-        self._status_serial = QLabel("Serial: Disconnected")
-        self._status_mode   = QLabel("Mode: IDLE")
-        self._status_angle  = QLabel("Angle: 0.0°")
-        self._status_bar.addWidget(self._status_serial)
-        self._status_bar.addWidget(self._make_sep())
-        self._status_bar.addWidget(self._status_mode)
-        self._status_bar.addWidget(self._make_sep())
-        self._status_bar.addWidget(self._status_angle)
-
-        # Navigate to dashboard by default
-        self._nav_list.setCurrentRow(0)
+        self.setStatusBar(sb)
+        self._s_serial = QLabel("Serial: —")
+        self._s_mode   = QLabel("Mode: —")
+        self._s_angle  = QLabel("Angle: —")
+        for w in [self._s_serial, self._s_mode, self._s_angle]:
+            sb.addWidget(w)
 
     def _build_sidebar(self) -> QWidget:
-        sidebar = QWidget()
-        sidebar.setFixedWidth(200)
-        sidebar.setStyleSheet(f"background-color: {COLORS['bg_panel']};")
-        layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        sb = QWidget()
+        sb.setFixedWidth(186)
+        sb.setStyleSheet(f"background:{COLORS['bg_panel']};")
+        v = QVBoxLayout(sb)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
 
-        # App title
-        title_frame = QFrame()
-        title_frame.setFixedHeight(56)
-        title_frame.setStyleSheet(
-            f"background-color: {COLORS['bg_dark']}; "
-            f"border-bottom: 1px solid {COLORS['border']};"
+        # App name
+        hdr = QFrame()
+        hdr.setFixedHeight(48)
+        hdr.setStyleSheet(
+            f"background:{COLORS['bg_dark']};"
+            f"border-bottom:1px solid {COLORS['border']};"
         )
-        title_layout = QVBoxLayout(title_frame)
-        title_layout.setContentsMargins(16, 12, 16, 12)
-        title_layout.setSpacing(0)
+        hl = QVBoxLayout(hdr)
+        hl.setContentsMargins(14, 10, 14, 10)
+        hl.setSpacing(0)
+        a = QLabel("SelfDrive")
+        a.setStyleSheet(f"color:{COLORS['text_primary']};font-size:15px;font-weight:700;")
+        b = QLabel("BeamNG Wheel")
+        b.setStyleSheet(f"color:{COLORS['text_dim']};font-size:10px;")
+        hl.addWidget(a)
+        hl.addWidget(b)
+        v.addWidget(hdr)
 
-        app_name = QLabel("SelfDrive")
-        app_name.setStyleSheet(
-            f"color: {COLORS['text_primary']}; font-size: 16px; font-weight: 700;"
-        )
-        sub_name = QLabel("BeamNG Wheel System")
-        sub_name.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 10px;"
-        )
-        title_layout.addWidget(app_name)
-        title_layout.addWidget(sub_name)
-        layout.addWidget(title_frame)
-
-        # Navigation list
-        self._nav_list = QListWidget()
-        self._nav_list.setObjectName("nav_list")
-        self._nav_list.setSpacing(0)
-        self._nav_list.setIconSize(QSize(18, 18))
-
-        self._nav_page_keys = []
-        nav_row = 0
+        # Nav list
+        self._nav = QListWidget()
+        self._nav.setObjectName("nav_list")
+        self._nav.setSpacing(0)
         self._nav_row_to_key = {}
+        nav_row = 0
 
-        for item in NAV_ITEMS:
+        for item in NAV:
             if item is None:
-                # Separator
                 sep = QListWidgetItem()
                 sep.setFlags(Qt.ItemFlag.NoItemFlags)
-                sep.setSizeHint(QSize(200, 10))
-                sep.setBackground(Qt.GlobalColor.transparent)
-                sep_widget = QFrame()
-                sep_widget.setFixedHeight(1)
-                sep_widget.setStyleSheet(f"background-color: {COLORS['border']};")
-                self._nav_list.addItem(sep)
-                self._nav_list.setItemWidget(sep, sep_widget)
+                sep.setSizeHint(QSize(186, 8))
+                self._nav.addItem(sep)
+                sep_w = QFrame()
+                sep_w.setFixedHeight(1)
+                sep_w.setStyleSheet(f"background:{COLORS['border']};")
+                self._nav.setItemWidget(sep, sep_w)
                 nav_row += 1
                 continue
-
-            display, icon, key = item
-            list_item = QListWidgetItem(f"  {icon}  {display}")
-            list_item.setSizeHint(QSize(200, 38))
-            self._nav_list.addItem(list_item)
+            label, key = item
+            li = QListWidgetItem(f"  {label}")
+            li.setSizeHint(QSize(186, 36))
+            self._nav.addItem(li)
             self._nav_row_to_key[nav_row] = key
             nav_row += 1
 
-        self._nav_list.currentRowChanged.connect(self._on_nav_changed)
-        layout.addWidget(self._nav_list, 1)
+        self._nav.currentRowChanged.connect(self._on_nav)
+        v.addWidget(self._nav, 1)
 
-        # Version label at bottom
-        ver_label = QLabel("v1.0.0")
-        ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ver_label.setFixedHeight(28)
-        ver_label.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 10px; "
-            f"border-top: 1px solid {COLORS['border']};"
+        ver = QLabel("v1.0.0")
+        ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ver.setFixedHeight(24)
+        ver.setStyleSheet(
+            f"color:{COLORS['text_dim']};font-size:10px;"
+            f"border-top:1px solid {COLORS['border']};"
         )
-        layout.addWidget(ver_label)
-
-        return sidebar
-
-    def _make_sep(self) -> QFrame:
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setFixedWidth(1)
-        sep.setFixedHeight(14)
-        sep.setStyleSheet(f"color: {COLORS['border']};")
-        return sep
+        v.addWidget(ver)
+        return sb
 
     def _connect_signals(self):
-        self._serial.connected.connect(self._on_serial_connected)
-        self._serial.disconnected.connect(self._on_serial_disconnected)
-        self._serial.telem_received.connect(self._update_status_bar)
-        self._safety.safety_estop.connect(self._on_estop)
-
-        # Connect logger to logs page
+        self._serial.connected.connect(self._update_status)
+        self._serial.disconnected.connect(self._update_status)
+        self._serial.telem_received.connect(self._update_status)
+        self._safety.safety_estop.connect(
+            lambda r: self._s_mode.setStyleSheet(f"color:{COLORS['accent_red']};font-weight:700;")
+        )
         self._log.log_message.connect(self._pages["logs"].append_log)
 
-    def _on_nav_changed(self, row: int):
+    def _on_nav(self, row):
         key = self._nav_row_to_key.get(row)
-        if key and key in self._page_index:
-            self._stack.setCurrentIndex(self._page_index[key])
+        if key and key in self._page_idx:
+            self._stack.setCurrentIndex(self._page_idx[key])
 
     def navigate_to(self, page_key: str):
-        """Programmatically navigate to a page by key."""
-        # Find the nav row for this key
         for row, key in self._nav_row_to_key.items():
             if key == page_key:
-                self._nav_list.setCurrentRow(row)
+                self._nav.setCurrentRow(row)
                 return
 
     def refresh_dynamic(self):
-        """Called by app.py timer at 10 Hz to update live page data."""
-        current_idx = self._stack.currentIndex()
-        current_page = self._stack.currentWidget()
-        if hasattr(current_page, "refresh"):
-            current_page.refresh()
-        self._update_status_bar()
+        page = self._stack.currentWidget()
+        if hasattr(page, "refresh"):
+            page.refresh()
+        self._update_status()
 
-    def _update_status_bar(self):
+    def _update_status(self):
         if self._serial.is_connected:
-            self._status_serial.setText(f"Serial: Connected")
-            self._status_serial.setStyleSheet(f"color: {COLORS['accent_green']};")
+            self._s_serial.setText(f"Serial: OK")
+            self._s_serial.setStyleSheet(f"color:{COLORS['accent_green']};")
         else:
-            self._status_serial.setText("Serial: Disconnected")
-            self._status_serial.setStyleSheet(f"color: {COLORS['text_dim']};")
-
-        mode = self._serial.device_mode if self._serial.is_connected else "IDLE"
-        self._status_mode.setText(f"Mode: {mode}")
-
-        telem = self._telemetry.latest
-        if telem:
-            self._status_angle.setText(f"Angle: {telem.angle:.1f}°")
-
-    def _on_serial_connected(self, port: str):
-        self._update_status_bar()
-
-    def _on_serial_disconnected(self):
-        self._update_status_bar()
-
-    def _on_estop(self, reason: str):
-        self._status_mode.setText("ESTOP!")
-        self._status_mode.setStyleSheet(f"color: {COLORS['accent_red']}; font-weight: 700;")
+            self._s_serial.setText("Serial: —")
+            self._s_serial.setStyleSheet(f"color:{COLORS['text_dim']};")
+        self._s_mode.setText(f"Mode: {self._serial.device_mode if self._serial.is_connected else '—'}")
+        t = self._telemetry.latest
+        if t:
+            self._s_angle.setText(f"Angle: {t.angle:.1f}°")
 
     def closeEvent(self, event):
-        """Clean shutdown."""
         self._serial.disconnect()
         self._beamng_manager.disconnect()
         self._safety.stop_watchdog()

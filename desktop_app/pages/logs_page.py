@@ -1,19 +1,17 @@
 """
-desktop_app/pages/logs_page.py — Application log viewer with filtering and export.
+desktop_app/pages/logs_page.py — Logs: live log viewer, level filter, export.
 """
 import os
 import time
 from PySide6.QtWidgets import (
-    QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QGroupBox,
-    QTextEdit, QComboBox, QCheckBox, QFileDialog
+    QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
+    QComboBox, QTextEdit, QCheckBox, QLineEdit
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
+from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor, QFileDialog
 from pages.base_page import BasePage
 from ui.styles import COLORS
 
-
-# Color mapping for log levels
 LEVEL_COLORS = {
     "DEBUG":    COLORS["text_dim"],
     "INFO":     COLORS["text_secondary"],
@@ -22,137 +20,105 @@ LEVEL_COLORS = {
     "ERROR":    COLORS["accent_red"],
     "CRITICAL": COLORS["accent_red"],
 }
+LEVEL_ORDER = ["DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
 
 
 class LogsPage(BasePage):
     def __init__(self, **kwargs):
-        super().__init__(
-            title="Logs",
-            subtitle="Application log viewer with filtering",
-            **kwargs
-        )
-        self._log_entries = []
-        self._build_content()
+        super().__init__(title="Logs", **kwargs)
+        self._entries = []
+        self._build()
 
-    def _build_content(self):
-        # Filter bar
-        filter_group = QGroupBox("FILTERS")
-        filter_layout = QHBoxLayout(filter_group)
+    def _build(self):
+        # ── Filter bar ───────────────────────────────────────────────
+        frow = QHBoxLayout()
+        frow.addWidget(QLabel("Level:"))
+        self._level_cb = QComboBox()
+        self._level_cb.addItems(["ALL"] + LEVEL_ORDER)
+        self._level_cb.setCurrentText("INFO")
+        self._level_cb.setFixedWidth(100)
+        self._level_cb.currentTextChanged.connect(self._refilter)
+        frow.addWidget(self._level_cb)
 
-        filter_layout.addWidget(QLabel("Level:"))
-        self._level_filter = QComboBox()
-        self._level_filter.addItems(["ALL", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
-        self._level_filter.setCurrentText("INFO")
-        self._level_filter.currentTextChanged.connect(self._apply_filter)
-        filter_layout.addWidget(self._level_filter)
-
-        filter_layout.addWidget(QLabel("Contains:"))
-        from PySide6.QtWidgets import QLineEdit
+        frow.addWidget(QLabel("Contains:"))
         self._text_filter = QLineEdit()
-        self._text_filter.setPlaceholderText("Filter text...")
-        self._text_filter.textChanged.connect(self._apply_filter)
-        filter_layout.addWidget(self._text_filter)
+        self._text_filter.setPlaceholderText("filter text...")
+        self._text_filter.setFixedWidth(180)
+        self._text_filter.textChanged.connect(self._refilter)
+        frow.addWidget(self._text_filter)
 
-        self._autoscroll_cb = QCheckBox("Auto-scroll")
-        self._autoscroll_cb.setChecked(True)
-        filter_layout.addWidget(self._autoscroll_cb)
-        filter_layout.addStretch()
-        self.content_layout.addWidget(filter_group)
+        self._autoscroll = QCheckBox("Auto-scroll")
+        self._autoscroll.setChecked(True)
+        frow.addWidget(self._autoscroll)
+        frow.addStretch()
+        self.content_layout.addLayout(frow)
 
-        # Log view
-        self._log_view = QTextEdit()
-        self._log_view.setReadOnly(True)
-        self._log_view.setStyleSheet(
-            f"font-family: Consolas; font-size: 12px; "
-            f"background: {COLORS['bg_dark']}; "
-            f"color: {COLORS['text_secondary']}; border: none;"
+        # ── Log view ─────────────────────────────────────────────────
+        self._view = QTextEdit()
+        self._view.setReadOnly(True)
+        self._view.setStyleSheet(
+            f"font-family:Consolas;font-size:11px;"
+            f"background:{COLORS['bg_panel']};border:none;"
         )
-        self.content_layout.addWidget(self._log_view, 1)
+        self.content_layout.addWidget(self._view, 1)
 
-        # Bottom toolbar
-        btn_layout = QHBoxLayout()
-        btn_clear = QPushButton("Clear")
-        btn_clear.clicked.connect(self._log_view.clear)
-        btn_export = QPushButton("Export Logs...")
-        btn_export.clicked.connect(self._export_logs)
-        btn_open_dir = QPushButton("Open Log Folder")
-        btn_open_dir.clicked.connect(self._open_log_dir)
-
-        btn_layout.addWidget(btn_clear)
-        btn_layout.addWidget(btn_export)
-        btn_layout.addWidget(btn_open_dir)
-        btn_layout.addStretch()
-        self.content_layout.addLayout(btn_layout)
+        # ── Buttons ───────────────────────────────────────────────────
+        brow = QHBoxLayout()
+        for label, fn in [("Clear", self._view.clear),
+                          ("Export...", self._export),
+                          ("Open Folder", self._open_folder)]:
+            b = QPushButton(label)
+            b.clicked.connect(fn)
+            brow.addWidget(b)
+        brow.addStretch()
+        self.content_layout.addLayout(brow)
 
     def append_log(self, level: str, message: str):
-        """Called by AppLogger signal to add a new log entry."""
         entry = {"level": level, "message": message, "time": time.time()}
-        self._log_entries.append(entry)
+        self._entries.append(entry)
+        if self._passes_filter(level, message):
+            self._render_entry(level, message, entry["time"])
 
-        # Apply filter before displaying
-        level_filter = self._level_filter.currentText()
-        text_filter  = self._text_filter.text().lower()
+    def _passes_filter(self, level, message):
+        lf = self._level_cb.currentText()
+        tf = self._text_filter.text().lower()
+        if lf != "ALL":
+            min_i = LEVEL_ORDER.index(lf) if lf in LEVEL_ORDER else 0
+            if level in LEVEL_ORDER and LEVEL_ORDER.index(level) < min_i:
+                return False
+        if tf and tf not in message.lower():
+            return False
+        return True
 
-        if level_filter != "ALL":
-            order = ["DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
-            min_idx = order.index(level_filter) if level_filter in order else 0
-            if level in order and order.index(level) < min_idx:
-                return
-
-        if text_filter and text_filter not in message.lower():
-            return
-
-        self._append_entry(level, message)
-
-    def _append_entry(self, level: str, message: str):
+    def _render_entry(self, level, message, ts):
         color = LEVEL_COLORS.get(level, COLORS["text_secondary"])
-        cursor = self._log_view.textCursor()
+        cursor = self._view.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
-
         fmt = QTextCharFormat()
         fmt.setForeground(QColor(color))
         cursor.setCharFormat(fmt)
+        cursor.insertText(f"[{time.strftime('%H:%M:%S', time.localtime(ts))}] {level:<8} {message}\n")
+        if self._autoscroll.isChecked():
+            self._view.setTextCursor(cursor)
+            self._view.ensureCursorVisible()
 
-        ts = time.strftime("%H:%M:%S")
-        cursor.insertText(f"[{ts}] {level:<8} {message}\n")
+    def _refilter(self):
+        self._view.clear()
+        for e in self._entries:
+            if self._passes_filter(e["level"], e["message"]):
+                self._render_entry(e["level"], e["message"], e["time"])
 
-        if self._autoscroll_cb.isChecked():
-            self._log_view.setTextCursor(cursor)
-            self._log_view.ensureCursorVisible()
-
-    def _apply_filter(self):
-        """Re-render all log entries with current filter."""
-        self._log_view.clear()
-        level_filter = self._level_filter.currentText()
-        text_filter  = self._text_filter.text().lower()
-        order = ["DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
-        min_idx = order.index(level_filter) if level_filter in order else 0
-
-        for entry in self._log_entries:
-            lvl = entry["level"]
-            msg = entry["message"]
-
-            if level_filter != "ALL":
-                if lvl in order and order.index(lvl) < min_idx:
-                    continue
-
-            if text_filter and text_filter not in msg.lower():
-                continue
-
-            self._append_entry(lvl, msg)
-
-    def _export_logs(self):
+    def _export(self):
+        from PySide6.QtWidgets import QFileDialog
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Logs", f"logs_{time.strftime('%Y%m%d_%H%M%S')}.txt",
-            "Text (*.txt)"
-        )
+            self, "Export Logs", f"logs_{time.strftime('%Y%m%d_%H%M%S')}.txt", "Text (*.txt)")
         if path:
             with open(path, "w") as f:
-                for entry in self._log_entries:
-                    ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry["time"]))
-                    f.write(f"[{ts}] {entry['level']:<8} {entry['message']}\n")
+                for e in self._entries:
+                    ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(e["time"]))
+                    f.write(f"[{ts}] {e['level']:<8} {e['message']}\n")
 
-    def _open_log_dir(self):
-        log_dir = "output/logs"
-        if os.path.exists(log_dir):
-            os.startfile(os.path.abspath(log_dir))
+    def _open_folder(self):
+        d = "output/logs"
+        if os.path.exists(d):
+            os.startfile(os.path.abspath(d))
