@@ -12,13 +12,14 @@ If this is your first time, do these first:
 
 1. Install Steam
 2. Buy/install Assetto Corsa (Ultimate Edition recommended so you have more tracks/cars)
-3. Launch the game once from Steam so it creates:
+3. Install Python 3.9+ from https://www.python.org/downloads/ (check "Add Python to PATH")
+4. Launch the game once from Steam so it creates:
 
 ```text
 %USERPROFILE%\Documents\Assetto Corsa\
 ```
 
-4. In video settings, run in a fixed resolution (for easier capture-region setup)
+5. In video settings, run in a fixed resolution (for easier capture-region setup)
 
 After that, continue with Fast Start below.
 
@@ -63,6 +64,13 @@ Into this folder:
 
 ```text
 %USERPROFILE%\Documents\Assetto Corsa\apps\python\ACDriverApp\
+```
+
+Copy command (PowerShell, from repo root):
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Documents\Assetto Corsa\apps\python" | Out-Null
+Copy-Item -Recurse -Force .\ac_driver\ac_app\ACDriverApp "$env:USERPROFILE\Documents\Assetto Corsa\apps\python\"
 ```
 
 Result should be:
@@ -130,6 +138,12 @@ Examples:
 
 ```powershell
 python ac_driver\main.py --mode classical --debug
+```
+
+Run this from repo root. If you are not in repo root, run:
+
+```powershell
+cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
 ```
 
 What success looks like:

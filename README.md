@@ -1,35 +1,33 @@
 # SelfDriveBeamNGTech
 
-Custom autonomous driving system built on BeamNG.tech.
+Primary project: autonomous driving for Assetto Corsa in `ac_driver/`.
 
-A modular, DIY self-driving stack using BeamNG.tech sensor data with its own
-perception, planning, and control pipeline. Not a wrapper around BeamNG's
-built-in AI.
+This repo includes:
+- `ac_driver/` (active): Assetto Corsa autonomy stack
+- `autonomy_project/` (legacy): BeamNG.tech stack kept for reference
 
-## Quick start
+## Assetto Corsa Quick Start (recommended)
+
+Run from any location (including `C:\WINDOWS\system32`):
 
 ```powershell
-# Run these from ANY location (including C:\WINDOWS\system32)
 cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
-
-# Create venv in the repo root
 python -m venv .venv
-
-# Activate it in PowerShell
 .\.venv\Scripts\Activate.ps1
-
-# Install deps
-pip install -r .\autonomy_project\requirements.txt
-
-# Edit autonomy_project/config.py to set your BeamNG.tech install path
-cd .\autonomy_project
-python .\main.py
+pip install -r .\ac_driver\requirements.txt
+python .\ac_driver\main.py --mode classical --debug
 ```
 
-If PowerShell blocks activation, run this once and retry:
+If PowerShell blocks activation, run once and retry:
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```
 
-See [`autonomy_project/README.md`](autonomy_project/README.md) for full documentation.
+Full first-time guide (including "I don't have Assetto Corsa installed yet"):
+[ac_driver/README.md](ac_driver/README.md)
+
+## BeamNG.tech (legacy)
+
+BeamNG docs are still available in:
+[autonomy_project/README.md](autonomy_project/README.md)
