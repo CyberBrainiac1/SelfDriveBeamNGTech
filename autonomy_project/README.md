@@ -82,24 +82,30 @@ autonomy_project/
 
 ## Setup
 
-```bash
-# 1. Clone the repo
-git clone <your-repo-url>
-cd SelfDriveBeamNGTech
+```powershell
+# 1. Open terminal in repo root (important)
+cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
 
 # 2. Create a virtual environment (recommended)
 python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Linux / macOS
 
-# 3. Install dependencies
-pip install -r autonomy_project/requirements.txt
+# 3. Activate venv (PowerShell)
+.\.venv\Scripts\Activate.ps1
 
-# 4. Edit config
-#    Open autonomy_project/config.py and set:
-#      - BeamNGConfig.home  → your BeamNG.tech install folder
-#      - ScenarioConfig.spawn_pos / spawn_rot_quat → a good road spot
+# 4. Install dependencies
+pip install -r .\autonomy_project\requirements.txt
+
+# 5. Edit config
+#    Open .\autonomy_project\config.py and set:
+#      - BeamNGConfig.home  -> your BeamNG.tech install folder
+#      - ScenarioConfig.spawn_pos / spawn_rot_quat -> a good road spot
 #      - Any PID gains, speed targets, etc. you want to tweak
+```
+
+If PowerShell blocks activation, run once then retry step 3:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```
 
 ---
@@ -108,9 +114,9 @@ pip install -r autonomy_project/requirements.txt
 
 ### Quick start
 
-```bash
-cd autonomy_project
-python main.py
+```powershell
+cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech\autonomy_project"
+python .\main.py
 ```
 
 A debug window will open showing the camera feed with lane-detection overlays, telemetry HUD, and control outputs.
@@ -123,29 +129,29 @@ A debug window will open showing the camera feed with lane-detection overlays, t
 
 ### With CLI overrides
 
-```bash
-python scripts/run_demo.py --speed 60 --no-overlay --save-frames
+```powershell
+python .\scripts\run_demo.py --speed 60 --no-overlay --save-frames
 ```
 
 ### Calibrate perception thresholds
 
-```bash
-python scripts/calibrate_sensors.py
+```powershell
+python .\scripts\calibrate_sensors.py
 ```
 
 This shows the raw camera ROI, HSV mask, and edge detection side-by-side so you can tune the thresholds in `config.py`.
 
 ### Replay a logged session
 
-```bash
-python scripts/replay_log.py --csv logs/telemetry.csv --frames logs/frames/
+```powershell
+python .\scripts\replay_log.py --csv .\logs\telemetry.csv --frames .\logs\frames\
 ```
 
 ### Run tests (no BeamNG needed)
 
-```bash
+```powershell
 pip install pytest
-python -m pytest tests/ -v
+python -m pytest .\tests\ -v
 ```
 
 ---
