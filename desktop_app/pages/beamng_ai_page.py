@@ -173,6 +173,11 @@ class BeamNGAIPage(BasePage):
         self._btn_bng.setText("Connect")
         self._bng_status.setText("Not connected")
         self._bng_status.setStyleSheet(f"color:{COLORS['text_dim']};")
+        # Stop the AI loop if it was running so the wheel is not left tracking a stale target
+        if self._ai.is_active:
+            self._ai.stop()
+            self._ai_status.setText("AI Status: Stopped  (BeamNG disconnected)")
+            self._ai_status.setStyleSheet(f"color:{COLORS['accent_yellow']};font-weight:600;")
 
     def _on_vehicle_state(self, state):
         if self._ai.is_active:

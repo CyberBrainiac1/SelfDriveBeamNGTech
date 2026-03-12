@@ -3,9 +3,10 @@ desktop_app/ui/main_window.py
 Main application window: compact sidebar + persistent telemetry strip + stacked pages.
 Engineering/sim-racing dashboard aesthetic.
 
-NormalWheelPage receives beamng_manager so its built-in Auto Drive tab can
-initialise and start/stop the BeamNG AI drive without navigating to the
-dedicated BeamNG AI page.
+The sidebar is split into two clearly labelled sections:
+  WHEEL CONTROLLER — hardware-facing pages (wheel setup, tuning, calibration, tests)
+  AI / BEAMNG      — autonomous driving pages (BeamNG.tech AI Mode)
+  SYSTEM           — app management pages (profiles, settings, logs)
 """
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
@@ -27,16 +28,20 @@ from pages.settings_page        import SettingsPage
 from pages.logs_page            import LogsPage
 
 
-# (label, page_key) — None = thin separator
+# NAV_ITEMS entries:
+#   (label, page_key) — navigable page
+#   None              — thin separator line
+#   str               — non-clickable section header label
 NAV_ITEMS = [
+    "WHEEL CONTROLLER",
     ("Dashboard",           "dashboard"),
     ("Normal Wheel Mode",   "normal_wheel"),
     ("Tuning",              "tuning"),
     ("Calibration",         "calibration"),
     ("Tests & Diagnostics", "tests_diag"),
-    None,
+    "AI / BEAMNG",
     ("BeamNG.tech AI Mode", "beamng_ai"),
-    None,
+    "SYSTEM",
     ("Profiles",            "profiles"),
     ("Settings",            "settings"),
     ("Logs",                "logs"),
@@ -107,7 +112,7 @@ class MainWindow(QMainWindow):
         self._pages = {
             "dashboard":    DashboardPage(**kw, beamng_manager=self._beamng_manager,
                                           profiles=self._profiles),
-            "normal_wheel": NormalWheelPage(**kw, beamng_manager=self._beamng_manager),
+            "normal_wheel": NormalWheelPage(**kw),
             "tuning":       TuningPage(**kw),
             "calibration":  CalibrationPage(**kw),
             "tests_diag":   TestsDiagnosticsPage(**kw),
