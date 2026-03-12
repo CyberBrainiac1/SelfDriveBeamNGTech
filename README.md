@@ -20,60 +20,35 @@ Python can now be installed automatically by bootstrap/setup scripts (via winget
 
 ## Fresh Machine (No Repo Cloned Yet)
 
-If the user does not have this repository yet, run one of these from PowerShell.
-
-Option A (recommended for most users, no admin): clone under user profile
+Default install (works from any folder, no hardcoded path):
 
 ```powershell
 irm https://raw.githubusercontent.com/CyberBrainiac1/SelfDriveBeamNGTech/main/scripts/clone_and_setup.ps1 -OutFile "$env:TEMP\clone_and_setup.ps1"
 & "$env:TEMP\clone_and_setup.ps1" -InstallRoot "$env:USERPROFILE\SelfDrive" -InstallAcApp
 ```
 
-Option B (admin): clone under Program Files
+Admin install to Program Files:
 
 ```powershell
 irm https://raw.githubusercontent.com/CyberBrainiac1/SelfDriveBeamNGTech/main/scripts/clone_and_setup.ps1 -OutFile "$env:TEMP\clone_and_setup.ps1"
 & "$env:TEMP\clone_and_setup.ps1" -InstallRoot "$env:ProgramFiles\SelfDrive" -InstallAcApp
 ```
 
-After bootstrap finishes, launch Assetto Corsa and enable ACDriverApp in UI Modules.
+After bootstrap finishes:
+
+1. Open a new PowerShell window
+2. Run `autoac status`
+3. Start Assetto Corsa and enable ACDriverApp in UI Modules
+4. Run `autoac run -Debug`
 
 If Python is missing, bootstrap auto-installs it for the current user.
 
 The bootstrap/setup scripts auto-detect the current Windows user via environment variables
 (`$env:USERNAME`, `$env:USERPROFILE`) so paths are user-specific automatically.
 
-## Quick Start (Copy/Paste)
-
-Run these commands from the repository root:
-
-```powershell
-# If needed, clone first (user path example):
-# git clone https://github.com/CyberBrainiac1/SelfDriveBeamNGTech.git "$env:USERPROFILE\SelfDrive\SelfDriveBeamNGTech"
-
-# Go to your local clone path (adjust if different)
-cd "$env:USERPROFILE\SelfDrive\SelfDriveBeamNGTech"
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r .\requirements.txt
-
-# Copy telemetry app into Assetto Corsa
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Documents\Assetto Corsa\apps\python" | Out-Null
-Copy-Item -Recurse -Force .\ac_app\ACDriverApp "$env:USERPROFILE\Documents\Assetto Corsa\apps\python\"
-
-# Start autonomous drive (classical mode)
-python .\main.py --mode classical --debug
-```
-
 ## Even Easier: One-Command PowerShell Scripts
 
-From your repository root:
-
-```powershell
-cd "$env:USERPROFILE\SelfDrive\SelfDriveBeamNGTech"
-```
-
-Setup Python environment and dependencies:
+If you are already inside a local clone, setup is:
 
 ```powershell
 .\scripts\setup_windows.ps1
