@@ -34,6 +34,50 @@ Copy-Item -Recurse -Force .\ac_app\ACDriverApp "$env:USERPROFILE\Documents\Asset
 python .\main.py --mode classical --debug
 ```
 
+## Even Easier: One-Command PowerShell Scripts
+
+From repository root:
+
+```powershell
+cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
+```
+
+Setup Python environment and dependencies:
+
+```powershell
+.\scripts\setup_windows.ps1
+```
+
+Install AC telemetry app files:
+
+```powershell
+.\scripts\install_ac_app.ps1
+```
+
+Run classical mode:
+
+```powershell
+.\scripts\run_classical.ps1 -DebugView
+```
+
+Run neural mode:
+
+```powershell
+.\scripts\run_neural.ps1 -DebugView
+```
+
+Collect training data:
+
+```powershell
+.\scripts\collect_data.ps1
+```
+
+Train model:
+
+```powershell
+.\scripts\train_model.ps1 -Epochs 30 -BatchSize 32
+```
+
 If PowerShell blocks activation, run this once then retry:
 
 ```powershell
