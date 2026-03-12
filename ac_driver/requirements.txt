@@ -1,0 +1,14 @@
+# Core runtime
+mss>=9.0
+opencv-python>=4.8
+numpy>=1.24
+
+# Neural network (optional — only needed for neural mode)
+tensorflow>=2.13.0
+
+# Analog control (optional — recommended for smooth driving)
+# Requires vJoy driver from https://github.com/jshafer817/vJoy/releases
+pyvjoy>=1.0.1
+
+# Testing
+pytest>=7.0
