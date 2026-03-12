@@ -5,10 +5,10 @@ CLI entry point for model training.
 
 Usage
 -----
-  python ac_driver/scripts/train.py
-  python ac_driver/scripts/train.py --epochs 50 --batch-size 64
+  python scripts/train.py
+  python scripts/train.py --epochs 50 --batch-size 64
 
-The trained model is saved to  ac_driver/models/acdriver_model.keras.
+The trained model is saved to  models/acdriver_model.keras.
 """
 
 from __future__ import annotations

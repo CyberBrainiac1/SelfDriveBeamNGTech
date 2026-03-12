@@ -3,8 +3,8 @@ run_classical.py
 ================
 Convenience wrapper — run the classical CV driver.
 
-  python ac_driver/scripts/run_classical.py
-  python ac_driver/scripts/run_classical.py --debug --target-speed 50
+  python scripts/run_classical.py
+  python scripts/run_classical.py --debug --target-speed 50
 """
 
 from __future__ import annotations

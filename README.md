@@ -1,33 +1,87 @@
 # SelfDriveBeamNGTech
 
-Primary project: autonomous driving for Assetto Corsa in `ac_driver/`.
+Main project: autonomous driving for Assetto Corsa (this repository root).
 
-This repo includes:
-- `ac_driver/` (active): Assetto Corsa autonomy stack
-- `autonomy_project/` (legacy): BeamNG.tech stack kept for reference
+The older BeamNG project is still available in [autonomy_project/README.md](autonomy_project/README.md),
+but Assetto Corsa is now the default and primary stack.
 
-## Assetto Corsa Quick Start (recommended)
+## First-Time Setup (No Assetto Corsa Installed Yet)
 
-Run from any location (including `C:\WINDOWS\system32`):
+1. Install Steam
+2. Buy/install Assetto Corsa
+3. Install Python 3.9+ and check "Add Python to PATH"
+4. Launch Assetto Corsa once so this folder exists:
+
+```text
+%USERPROFILE%\Documents\Assetto Corsa\
+```
+
+## Quick Start (Copy/Paste)
+
+Run these commands exactly, from any location (even `C:\WINDOWS\system32`):
 
 ```powershell
 cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r .\ac_driver\requirements.txt
-python .\ac_driver\main.py --mode classical --debug
+pip install -r .\requirements.txt
+
+# Copy telemetry app into Assetto Corsa
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Documents\Assetto Corsa\apps\python" | Out-Null
+Copy-Item -Recurse -Force .\ac_app\ACDriverApp "$env:USERPROFILE\Documents\Assetto Corsa\apps\python\"
+
+# Start autonomous drive (classical mode)
+python .\main.py --mode classical --debug
 ```
 
-If PowerShell blocks activation, run once and retry:
+If PowerShell blocks activation, run this once then retry:
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```
 
-Full first-time guide (including "I don't have Assetto Corsa installed yet"):
-[ac_driver/README.md](ac_driver/README.md)
+## In-Game Setup (Required)
 
-## BeamNG.tech (legacy)
+1. Open Assetto Corsa
+2. Go to Options -> General -> UI Modules
+3. Enable ACDriverApp
+4. Start a practice session
 
-BeamNG docs are still available in:
-[autonomy_project/README.md](autonomy_project/README.md)
+Verify telemetry file is updating while driving:
+
+```powershell
+Test-Path "$env:USERPROFILE\Documents\Assetto Corsa\logs\acdriver_state.json"
+```
+
+## Control Modes
+
+Edit [config.py](config.py):
+
+- `mode = "keys"` for easiest first run
+- `mode = "vjoy"` for smoother analog control (recommended after first run)
+
+vJoy optional setup:
+
+1. Install from https://github.com/jshafer817/vJoy/releases
+2. Enable X, Y, Z axes in vJoyConf
+3. Bind those axes in Assetto Corsa controls
+
+## Neural Mode
+
+Collect data:
+
+```powershell
+python .\scripts\collect_data.py
+```
+
+Train model:
+
+```powershell
+python .\scripts\train.py --epochs 30 --batch-size 32
+```
+
+Run neural driver:
+
+```powershell
+python .\main.py --mode neural --debug
+```

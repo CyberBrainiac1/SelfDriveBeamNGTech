@@ -3,8 +3,8 @@ run_neural.py
 =============
 Convenience wrapper — run the CNN-based neural driver.
 
-  python ac_driver/scripts/run_neural.py
-  python ac_driver/scripts/run_neural.py --debug --target-speed 70
+  python scripts/run_neural.py
+  python scripts/run_neural.py --debug --target-speed 70
 """
 
 from __future__ import annotations

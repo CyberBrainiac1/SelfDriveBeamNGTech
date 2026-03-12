@@ -22,13 +22,13 @@ Architecture (inspired by learn-to-race/l2r)
 Usage
 -----
   # Classical (no model needed — works immediately)
-  python ac_driver/main.py --mode classical
+    python main.py --mode classical
 
   # Neural (train model first with scripts/train.py)
-  python ac_driver/main.py --mode neural
+    python main.py --mode neural
 
   # Override config at runtime
-  python ac_driver/main.py --mode classical --target-speed 60 --debug
+    python main.py --mode classical --target-speed 60 --debug
 
 Prerequisite
 ------------

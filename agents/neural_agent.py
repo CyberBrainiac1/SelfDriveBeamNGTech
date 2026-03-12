@@ -9,7 +9,7 @@ Architecture
   speed_kph  →  SpeedController (PID)  →  throttle / brake
 
 The model must be trained first via:
-  python ac_driver/scripts/train.py
+    python scripts/train.py
 
 The steering network predicts a normalised steering angle directly from
 raw pixels — it does NOT use explicit lane detection, making it more
@@ -38,7 +38,7 @@ class NeuralAgent(AbstractAgent):
         if not self.predictor.load():
             raise FileNotFoundError(
                 f"No model found at '{CFG.training.model_path}'.\n"
-                "Run:  python ac_driver/scripts/train.py"
+                "Run:  python scripts/train.py"
             )
         self.speed_ctrl = SpeedController()
 

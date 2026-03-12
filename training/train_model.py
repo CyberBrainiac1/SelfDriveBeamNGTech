@@ -4,7 +4,7 @@ train_model.py
 Loads collected .npz data shards, trains the NVIDIA CNN, and saves
 the model to  models/acdriver_model.keras.
 
-Run from ac_driver/:
+Run from repository root:
     python scripts/train.py
 
 ORIGINAL BUGS FIXED

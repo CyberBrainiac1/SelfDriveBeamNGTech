@@ -4,7 +4,7 @@ data_collector.py
 Records (screen_frame, steering_label) pairs while YOU drive the car.
 The neural model is then trained on this data via train_model.py.
 
-Run from the ac_driver/ folder:
+Run from the repository root:
     python scripts/collect_data.py
 
 HOW IT WORKS
