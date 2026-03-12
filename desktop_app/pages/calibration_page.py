@@ -6,9 +6,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
     QDoubleSpinBox, QSpinBox, QFormLayout, QFrame
 )
+from PySide6.QtCore import Qt
 from pages.base_page import BasePage
 from ui.styles import COLORS
-
 
 class CalibrationPage(BasePage):
     def __init__(self, **kwargs):
@@ -136,5 +136,3 @@ class CalibrationPage(BasePage):
             self._enc_lbl.setText(str(t.enc))
             self._mode_lbl.setText(t.mode)
 
-
-from PySide6.QtCore import Qt

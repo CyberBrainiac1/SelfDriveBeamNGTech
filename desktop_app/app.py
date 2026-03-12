@@ -29,7 +29,7 @@ class MainApp:
         self.logger = AppLogger()
         self.config = ConfigManager()
         self.telemetry = TelemetryBuffer()
-        self.serial = SerialManager(self.telemetry, self.logger)
+        self.serial = SerialManager()
         self.safety = SafetyManager(self.serial, self.logger)
         self.beamng_manager = BeamNGManager(self.serial, self.logger)
         self.profiles = ProfileManager(self.config, self.logger)
@@ -48,14 +48,11 @@ class MainApp:
         if start_in_beamng_mode:
             self.window.navigate_to("beamng_ai")
 
-        # ---- Background update timer (10 Hz UI refresh) ----
-        self._ui_timer = QTimer()
-        self._ui_timer.timeout.connect(self._tick)
-        self._ui_timer.start(100)
+        # Main window owns its own refresh timer — no duplicate needed here.
+        # Remove the app-level timer to avoid double-tick.
 
     def show(self):
         self.window.show()
 
     def _tick(self):
-        """Periodic UI update tick."""
-        self.window.refresh_dynamic()
+        pass  # main_window._refresh_timer handles periodic refresh

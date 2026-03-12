@@ -132,9 +132,8 @@ class AIController(QObject):
             target = self._safety.clamp_target(target)
             self.target_computed.emit(target)
 
-            if self._bridge.is_active and self._safety.is_connected_check():
-                from core.serial_manager import SerialManager  # lazy import
-                pass  # bridge.process_vehicle_state handled by signal
+            # bridge.process_vehicle_state is handled by the BeamNG signal;
+            # no direct serial call needed here for BeamNG source.
 
             # Direct serial send for non-BeamNG sources
             if source != TargetSource.BEAMNG:

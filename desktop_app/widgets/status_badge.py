@@ -39,7 +39,7 @@ class StatusBadge(QLabel):
     def set_estop(self, text: str = "ESTOP"):  self._apply("estop",    text)
 
     def _apply(self, state: str, text: str):
-        fg, bg = _presets(state)
+        fg, bg = _get_preset_colors(state)
         self.setText(text)
         self.setStyleSheet(
             f"color: {fg}; background: {bg}; border: 1px solid {fg}; "
@@ -48,5 +48,6 @@ class StatusBadge(QLabel):
         )
 
 
-def _presets(state: str):
+def _get_preset_colors(state: str):
+    """Return (foreground, background) color pair for the given state name."""
     return _PRESETS.get(state, _PRESETS["inactive"])
