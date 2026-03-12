@@ -79,6 +79,14 @@ autoac tail-state -Lines 40
 autoac update
 ```
 
+If `autoac` is not recognized, run this once from your clone folder:
+
+```powershell
+.\scripts\register_autoac_command.ps1
+```
+
+Then open a new terminal (or run `. $PROFILE`) and retry `autoac help`.
+
 Install AC telemetry app files:
 
 ```powershell
