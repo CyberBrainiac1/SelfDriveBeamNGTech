@@ -1,6 +1,7 @@
 # AC Driver (Assetto Corsa Autonomy)
 
 This is a full autonomous driving stack for Assetto Corsa with:
+
 - Classical mode: OpenCV lane detection + PID
 - Neural mode: NVIDIA-style CNN steering model
 - Control output: vJoy analog (recommended) or keyboard fallback
@@ -45,6 +46,7 @@ Result should be:
 ### 4. Enable ACDriverApp in Assetto Corsa
 
 In game:
+
 1. Open Assetto Corsa
 2. Go to Options -> General -> UI Modules
 3. Enable ACDriverApp
@@ -67,6 +69,7 @@ mode = "vjoy"
 ```
 
 If using vJoy:
+
 1. Install vJoy from https://github.com/jshafer817/vJoy/releases
 2. Open vJoyConf and enable axes X, Y, Z on device 1
 3. In AC Controls, bind steering/throttle/brake to vJoy axes
@@ -76,6 +79,7 @@ If using vJoy:
 In [ac_driver/config.py](ac_driver/config.py), set `monitor_region` to your AC window.
 
 Examples:
+
 - 1920x1080 fullscreen: `(0, 40, 1920, 1080)`
 - 800x600 windowed: `(0, 40, 800, 600)`
 
@@ -86,6 +90,7 @@ python ac_driver\main.py --mode classical --debug
 ```
 
 What success looks like:
+
 - Terminal prints FPS/speed/steer/reward
 - Debug window opens
 - Car starts steering and throttle/brake control automatically
@@ -148,6 +153,7 @@ python ac_driver\scripts\run_neural.py --debug
 ### No telemetry / timed out waiting for AC
 
 Check:
+
 1. ACDriverApp is enabled in UI Modules
 2. You are in an active track session (not only menu)
 3. File exists and updates:
@@ -159,6 +165,7 @@ Check:
 ### Car does not steer correctly
 
 Check:
+
 1. `monitor_region` matches your game window
 2. Correct control mode (`keys` or `vjoy`) in [ac_driver/config.py](ac_driver/config.py)
 3. For vJoy, axis mappings are done in AC Controls
