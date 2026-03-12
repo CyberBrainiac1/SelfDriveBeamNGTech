@@ -25,7 +25,7 @@ class TestsDiagnosticsPage(BasePage):
         # ── Quick serial tests ────────────────────────────────────────
         row1 = QHBoxLayout()
         for label, fn in [("Ping", self._ping), ("Get Version", self._version),
-                          ("Request Telemetry", self._telem), ("Clear Faults", self._clear_faults)]:
+                          ("Read Config", self._telem), ("Clear Faults", self._clear_faults)]:
             b = QPushButton(label)
             b.clicked.connect(fn)
             row1.addWidget(b)
@@ -105,7 +105,7 @@ class TestsDiagnosticsPage(BasePage):
 
     def _telem(self):
         if self._serial and self._serial.is_connected:
-            self._serial.send_command({"cmd": "get_telemetry"})
+            self._serial.get_config()
 
     def _clear_faults(self):
         if self._serial and self._serial.is_connected:

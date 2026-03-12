@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
     QDoubleSpinBox, QSpinBox, QFormLayout, QFrame
 )
+from PySide6.QtCore import Qt
 from pages.base_page import BasePage
 from ui.styles import COLORS
 
@@ -22,9 +23,6 @@ class TuningPage(BasePage):
         form.setVerticalSpacing(8)
         form.setLabelAlignment(Qt.AlignRight)
         self.content_layout.addLayout(form)
-
-        from PySide6.QtCore import Qt
-        form.setLabelAlignment(Qt.AlignRight)
 
         def row(key, label, mn, mx, default, decimals=2, suffix="", tip=""):
             sb = QDoubleSpinBox()

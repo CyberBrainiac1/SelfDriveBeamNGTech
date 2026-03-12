@@ -13,6 +13,7 @@ Layout (left-right split):
     Angle + Motor chart
     [Tabs] Diagnostics | Tests | Firmware
 """
+import json
 import os
 import subprocess
 import time
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import (
     QComboBox, QDoubleSpinBox, QSpinBox, QScrollArea,
     QGroupBox, QFormLayout, QTabWidget, QTextEdit, QProgressBar,
     QLineEdit, QCheckBox, QSplitter, QFrame, QListWidget,
-    QListWidgetItem, QInputDialog, QMessageBox
+    QListWidgetItem, QInputDialog, QMessageBox, QFileDialog
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
@@ -387,6 +388,23 @@ class NormalWheelPage(BasePage):
         btn_refresh.clicked.connect(lambda: self._serial.list_profiles()
                                     if self._serial and self._serial.is_connected else None)
         v.addWidget(btn_refresh)
+
+        # JSON file export / import
+        io_row = QHBoxLayout()
+        btn_export = QPushButton("Export JSON")
+        btn_export.setObjectName("btn_tool")
+        btn_export.setFixedHeight(22)
+        btn_export.setToolTip("Save active device config to a JSON file")
+        btn_export.clicked.connect(self._export_profile_json)
+        btn_import = QPushButton("Import JSON")
+        btn_import.setObjectName("btn_tool")
+        btn_import.setFixedHeight(22)
+        btn_import.setToolTip("Load config from a JSON file and push to device")
+        btn_import.clicked.connect(self._import_profile_json)
+        io_row.addWidget(btn_export)
+        io_row.addWidget(btn_import)
+        io_row.addStretch()
+        v.addLayout(io_row)
 
         return sec
 
@@ -984,7 +1002,83 @@ class NormalWheelPage(BasePage):
             QTimer.singleShot(300, lambda: self._serial.get_config()
                               if self._serial.is_connected else None)
 
-    # ─── Sweep test ──────────────────────────────────────────────────
+    # ─── Profile JSON export / import ────────────────────────────────
+
+    # _EEPROM_CONFIG_KEYS mirrors the keys the firmware accepts via set_config
+    _EEPROM_CONFIG_KEYS = (
+        "kp", "kd", "ki", "dead_zone",
+        "angle_range", "counts_per_rev", "gear_ratio",
+        "invert_encoder", "invert_motor", "max_motor",
+        "slew_rate", "centering", "damping",
+        "friction", "inertia", "smoothing",
+    )
+
+    def _export_profile_json(self):
+        """Save the last known device config to a JSON file on disk."""
+        if not self._config_cache:
+            QMessageBox.warning(
+                self, "No Config",
+                "No config loaded yet.\n"
+                "Connect to the device and use Diagnostics → Read Config first."
+            )
+            return
+        profile_name = self._config_cache.get("profile", "export")
+        default_name = f"profile_{profile_name}.json"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Profile", default_name, "JSON (*.json)"
+        )
+        if not path:
+            return
+        data = {k: v for k, v in self._config_cache.items()
+                if k in self._EEPROM_CONFIG_KEYS}
+        data["profile"] = profile_name
+        try:
+            with open(path, "w") as fh:
+                json.dump(data, fh, indent=2)
+        except OSError as exc:
+            QMessageBox.warning(self, "Export Failed", str(exc))
+            return
+        if hasattr(self, "_serial_log"):
+            self._serial_log.append(f"[export] {os.path.basename(path)}")
+
+    def _import_profile_json(self):
+        """Load a JSON profile from disk and push all config keys to the device."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Profile", "", "JSON (*.json)"
+        )
+        if not path:
+            return
+        try:
+            with open(path) as fh:
+                data = json.load(fh)
+        except (OSError, json.JSONDecodeError) as exc:
+            QMessageBox.warning(self, "Import Failed", str(exc))
+            return
+        if not self._check():
+            QMessageBox.warning(self, "Not Connected", "Connect to device first.")
+            return
+        to_push = {k: data[k] for k in self._EEPROM_CONFIG_KEYS if k in data}
+        if not to_push:
+            QMessageBox.warning(
+                self, "Nothing to Import",
+                "The file contained no recognised config keys."
+            )
+            return
+        self._serial.push_config(to_push)
+        # Offer to save to EEPROM immediately
+        if QMessageBox.question(
+            self, "Save to EEPROM?",
+            f"Imported {len(to_push)} keys from {os.path.basename(path)}.\n"
+            "Save to EEPROM now so settings survive power-off?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        ) == QMessageBox.StandardButton.Yes:
+            self._serial.save_config()
+        QTimer.singleShot(300, lambda: self._serial.get_config()
+                          if self._serial.is_connected else None)
+        if hasattr(self, "_serial_log"):
+            self._serial_log.append(
+                f"[import] {os.path.basename(path)} → {len(to_push)} keys"
+            )
 
     def _start_sweep(self):
         if not self._check():

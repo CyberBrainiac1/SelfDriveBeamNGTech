@@ -103,13 +103,6 @@ class SettingsPage(BasePage):
         btn_save.clicked.connect(self._save)
         self.content_layout.addWidget(btn_save)
 
-    def _sep(self):
-        from PySide6.QtWidgets import QFrame
-        f = QFrame()
-        f.setFrameShape(QFrame.Shape.HLine)
-        f.setStyleSheet(f"background:{COLORS['border']};max-height:1px;")
-        return f
-
     def _refresh_ports(self):
         cur = self._port_combo.currentText()
         self._port_combo.clear()

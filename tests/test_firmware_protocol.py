@@ -177,3 +177,78 @@ def test_boot_response_parse():
     b = json.loads(raw)
     assert b["version"] == "2.0.0"
     assert b["eeprom"]  is True
+
+
+# ── Profile JSON export/import round-trip ─────────────────────────────────
+
+_EEPROM_CONFIG_KEYS = (
+    "kp", "kd", "ki", "dead_zone",
+    "angle_range", "counts_per_rev", "gear_ratio",
+    "invert_encoder", "invert_motor", "max_motor",
+    "slew_rate", "centering", "damping",
+    "friction", "inertia", "smoothing",
+)
+
+def _make_config_cache():
+    """Build a typical config dict as returned by the firmware."""
+    return {
+        "t": "config", "kp": 1.8, "kd": 0.12, "ki": 0.0, "dead_zone": 1.5,
+        "angle_range": 540.0, "counts_per_rev": 2400.0, "gear_ratio": 1.0,
+        "invert_encoder": False, "invert_motor": False, "max_motor": 200,
+        "slew_rate": 20.0, "centering": 1.0, "damping": 0.12,
+        "friction": 0.05, "inertia": 0.04, "smoothing": 0.1,
+        "profile": "Normal", "eeprom_ok": True,
+    }
+
+
+def test_profile_export_contains_eeprom_keys():
+    """Export should include all recognised EEPROM config keys."""
+    cache = _make_config_cache()
+    exported = {k: v for k, v in cache.items() if k in _EEPROM_CONFIG_KEYS}
+    exported["profile"] = cache.get("profile", "export")
+    assert set(_EEPROM_CONFIG_KEYS).issubset(exported.keys())
+    assert exported["profile"] == "Normal"
+
+
+def test_profile_export_excludes_non_config_keys():
+    """Export must not include firmware-internal keys like 't' or 'eeprom_ok'."""
+    cache = _make_config_cache()
+    exported = {k: v for k, v in cache.items() if k in _EEPROM_CONFIG_KEYS}
+    assert "t" not in exported
+    assert "eeprom_ok" not in exported
+
+
+def test_profile_export_import_roundtrip():
+    """Values written during export should be recovered exactly on import."""
+    import tempfile, os
+    cache = _make_config_cache()
+    exported = {k: v for k, v in cache.items() if k in _EEPROM_CONFIG_KEYS}
+    exported["profile"] = cache["profile"]
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False
+    ) as fh:
+        json.dump(exported, fh, indent=2)
+        tmp_path = fh.name
+
+    try:
+        with open(tmp_path) as fh:
+            imported = json.load(fh)
+        to_push = {k: imported[k] for k in _EEPROM_CONFIG_KEYS if k in imported}
+        assert to_push["kp"] == pytest.approx(1.8)
+        assert to_push["angle_range"] == pytest.approx(540.0)
+        assert to_push["max_motor"] == 200
+        assert to_push["invert_encoder"] is False
+        assert set(_EEPROM_CONFIG_KEYS).issubset(to_push.keys())
+    finally:
+        os.unlink(tmp_path)
+
+
+def test_profile_import_rejects_unknown_keys():
+    """Import should silently skip keys not in the EEPROM config set."""
+    alien = {"unknown_key": 42, "kp": 2.0, "t": "config"}
+    to_push = {k: alien[k] for k in _EEPROM_CONFIG_KEYS if k in alien}
+    assert "unknown_key" not in to_push
+    assert "t" not in to_push
+    assert to_push.get("kp") == pytest.approx(2.0)
+
