@@ -11,7 +11,12 @@ Layout (left-right split):
   RIGHT (flex)              — live panels stacked vertically:
     Wheel State strip
     Angle + Motor chart
-    [Tabs] Diagnostics | Tests | Firmware
+    [Tabs] Diagnostics | Tests | Firmware | Auto Drive (if BeamNG available)
+
+Auto Drive tab — lets the user initialise and start/stop the BeamNG AI
+auto-drive directly from this page without needing to navigate to the
+dedicated BeamNG AI page.  It does NOT expose shared-control sliders or
+replay controls — just: Connect BeamNG, pick source, Start, Stop, E-Stop.
 """
 import json
 import os
@@ -33,6 +38,8 @@ from widgets.collapsible import CollapsibleSection
 from widgets.mini_chart import MiniChart
 from widgets.status_badge import StatusBadge
 from core.serial_manager import SerialManager
+from beamng.beamng_bridge import BeamNGBridge
+from beamng.ai_controller import AIController, TargetSource
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -101,9 +108,17 @@ class NormalWheelPage(BasePage):
     """
 
     def __init__(self, **kwargs):
+        # BeamNG manager is optional — enables the Auto Drive tab when present.
+        self._beamng_manager = kwargs.pop("beamng_manager", None)
         super().__init__(title="Normal Wheel Mode", **kwargs)
         self._config_cache: dict = {}
         self._profile_slots: list = []
+
+        # Create BeamNG bridge + AI controller so this page can launch auto-drive
+        # without the user navigating to the dedicated BeamNG AI page.
+        self._bridge: BeamNGBridge = BeamNGBridge(self._serial, self._safety, self._config)
+        self._ai: AIController = AIController(self._bridge, self._safety, self._log)
+
         self._build()
         self._wire_signals()
 
@@ -441,12 +456,13 @@ class NormalWheelPage(BasePage):
         cl.addWidget(self._chart_motor)
         v.addWidget(charts)
 
-        # ── Tabs: Diagnostics / Tests / Firmware ─────────────────
+        # ── Tabs: Diagnostics / Tests / Firmware / Auto Drive ────────
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
         tabs.addTab(self._build_diag_tab(), "Diagnostics")
         tabs.addTab(self._build_tests_tab(), "Tests")
         tabs.addTab(self._build_firmware_tab(), "Firmware")
+        tabs.addTab(self._build_autodrive_tab(), "Auto Drive")
         v.addWidget(tabs, 1)
 
         return w
@@ -755,6 +771,140 @@ class NormalWheelPage(BasePage):
         v.addStretch()
         return w
 
+    # ── Auto Drive tab ────────────────────────────────────────────
+
+    def _build_autodrive_tab(self) -> QWidget:
+        """
+        Compact panel that lets the user initialise and start/stop the
+        BeamNG AI auto-drive without navigating to the dedicated AI page.
+
+        The tab is always built; when no beamng_manager is wired up the
+        controls are shown but the status badge will read "No BeamNG Manager"
+        to make the missing dependency obvious.
+        """
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(6, 6, 6, 6)
+        v.setSpacing(6)
+
+        # ── BeamNG connection ─────────────────────────────────────
+        grp_con = QGroupBox("BEAMNG CONNECTION")
+        grp_con.setProperty("accent", "cyan")
+        cl = QHBoxLayout(grp_con)
+        cl.setContentsMargins(8, 10, 8, 8)
+        cl.setSpacing(8)
+
+        self._ad_badge_bng = StatusBadge("Not Connected", "inactive")
+        cl.addWidget(self._ad_badge_bng)
+
+        self._ad_btn_bng = QPushButton("Connect BeamNG")
+        self._ad_btn_bng.setObjectName("btn_primary")
+        self._ad_btn_bng.setFixedHeight(26)
+        self._ad_btn_bng.clicked.connect(self._ad_toggle_bng)
+        cl.addWidget(self._ad_btn_bng)
+        cl.addStretch()
+
+        if self._beamng_manager is None:
+            self._ad_badge_bng.set_inactive("No BeamNG Manager")
+            self._ad_btn_bng.setEnabled(False)
+            self._ad_btn_bng.setToolTip(
+                "Pass beamng_manager= to NormalWheelPage to enable BeamNG controls."
+            )
+
+        v.addWidget(grp_con)
+
+        # ── Drive control ─────────────────────────────────────────
+        grp_ctrl = QGroupBox("AUTO DRIVE CONTROL")
+        grp_ctrl.setProperty("accent", "green")
+        ctl_v = QVBoxLayout(grp_ctrl)
+        ctl_v.setContentsMargins(8, 10, 8, 8)
+        ctl_v.setSpacing(6)
+
+        # Source row
+        src_row = QHBoxLayout()
+        src_row.addWidget(QLabel("Source:"))
+        self._ad_src_combo = QComboBox()
+        self._ad_src_combo.addItems([s.value for s in TargetSource])
+        self._ad_src_combo.setCurrentText(TargetSource.BEAMNG.value)
+        self._ad_src_combo.setFixedWidth(140)
+        self._ad_src_combo.setToolTip(
+            "BEAMNG — mirrors live BeamNG steering to the wheel.\n"
+            "MANUAL_TEST — use angle slider for offline testing.\n"
+            "PATH_FOLLOW / LANE_CENTER — algorithmic sources."
+        )
+        src_row.addWidget(self._ad_src_combo)
+        src_row.addStretch()
+        ctl_v.addLayout(src_row)
+
+        # Start / Stop row
+        btn_row = QHBoxLayout()
+        self._ad_btn_start = QPushButton("▶  Start Auto Drive")
+        self._ad_btn_start.setObjectName("btn_success")
+        self._ad_btn_start.setFixedHeight(28)
+        self._ad_btn_start.clicked.connect(self._ad_start)
+
+        self._ad_btn_stop = QPushButton("■  Stop")
+        self._ad_btn_stop.setObjectName("btn_warning")
+        self._ad_btn_stop.setFixedHeight(28)
+        self._ad_btn_stop.clicked.connect(self._ad_stop)
+
+        btn_row.addWidget(self._ad_btn_start)
+        btn_row.addWidget(self._ad_btn_stop)
+        btn_row.addStretch()
+        ctl_v.addLayout(btn_row)
+
+        # Status line
+        self._ad_status_lbl = QLabel("Stopped")
+        self._ad_status_lbl.setStyleSheet(
+            f"color:{COLORS['text_secondary']};font-size:11px;font-family:Consolas;"
+        )
+        ctl_v.addWidget(self._ad_status_lbl)
+        v.addWidget(grp_ctrl)
+
+        # ── AI live readout ───────────────────────────────────────
+        grp_telem = QGroupBox("AI TELEMETRY")
+        tl = QHBoxLayout(grp_telem)
+        tl.setContentsMargins(8, 10, 8, 8)
+        tl.setSpacing(16)
+
+        def _ad_cell(label: str):
+            col = QVBoxLayout()
+            col.setSpacing(1)
+            cap = QLabel(label)
+            cap.setStyleSheet(
+                f"color:{COLORS['text_dim']};font-size:9px;"
+                f"font-weight:700;letter-spacing:1px;"
+            )
+            val = QLabel("—")
+            val.setStyleSheet(
+                f"color:{COLORS['accent_cyan']};font-family:Consolas;"
+                f"font-size:15px;font-weight:700;"
+            )
+            col.addWidget(cap)
+            col.addWidget(val)
+            tl.addLayout(col)
+            return val
+
+        self._ad_t_target = _ad_cell("AI TARGET")
+        self._ad_t_mode   = _ad_cell("AI MODE")
+        tl.addStretch()
+        v.addWidget(grp_telem)
+
+        v.addStretch()
+
+        # ── Emergency disengage ───────────────────────────────────
+        btn_estop = QPushButton("⚠  EMERGENCY DISENGAGE")
+        btn_estop.setObjectName("btn_danger")
+        btn_estop.setFixedHeight(36)
+        btn_estop.clicked.connect(self._ad_estop)
+        v.addWidget(btn_estop)
+
+        # Wire AI controller signals
+        self._ai.target_computed.connect(self._ad_on_target)
+        self._ai.mode_changed.connect(self._ad_on_mode)
+
+        return w
+
     # ─── Signal wiring ──────────────────────────────────────────────
 
     def _wire_signals(self):
@@ -769,10 +919,89 @@ class NormalWheelPage(BasePage):
             )
             self._serial.boot_received.connect(self._on_boot)
 
+        # BeamNG manager signals (only wired when a manager is provided)
+        if self._beamng_manager is not None:
+            self._beamng_manager.connected.connect(self._ad_on_bng_connected)
+            self._beamng_manager.disconnected.connect(self._ad_on_bng_disconnected)
+            # Forward vehicle state to the bridge while AI is active
+            self._beamng_manager.vehicle_state.connect(self._ad_on_vehicle_state)
+
     # ─── Handlers ───────────────────────────────────────────────────
 
     def _check(self) -> bool:
         return bool(self._serial and self._serial.is_connected)
+
+    # ── Auto Drive handlers ──────────────────────────────────────────
+
+    def _ad_toggle_bng(self):
+        """Connect to or disconnect from BeamNG.tech."""
+        if self._beamng_manager is None:
+            return
+        if self._beamng_manager.is_connected:
+            self._beamng_manager.disconnect()
+        else:
+            host = self._config.get("beamng.host", "localhost") if self._config else "localhost"
+            port = self._config.get("beamng.port", 64256)       if self._config else 64256
+            self._beamng_manager.connect(host, port)
+
+    def _ad_on_bng_connected(self):
+        self._ad_badge_bng.set_ok("Connected")
+        self._ad_btn_bng.setText("Disconnect BeamNG")
+
+    def _ad_on_bng_disconnected(self):
+        self._ad_badge_bng.set_inactive("Not Connected")
+        self._ad_btn_bng.setText("Connect BeamNG")
+        # If AI was running, stop it cleanly
+        if self._ai.is_active:
+            self._ai.stop()
+            self._ad_status_lbl.setText("Stopped  (BeamNG disconnected)")
+            self._ad_status_lbl.setStyleSheet(
+                f"color:{COLORS['accent_yellow']};font-size:11px;font-family:Consolas;"
+            )
+
+    def _ad_on_vehicle_state(self, state: dict):
+        """Forward BeamNG vehicle state to the bridge only while AI is active."""
+        if self._ai.is_active:
+            self._bridge.process_vehicle_state(state)
+
+    def _ad_start(self):
+        """Initialise and start the AI auto-drive loop."""
+        src = TargetSource(self._ad_src_combo.currentText())
+        self._ai.set_source(src)
+        self._ai.start()
+        self._ad_status_lbl.setText(f"Active — {src.value}")
+        self._ad_status_lbl.setStyleSheet(
+            f"color:{COLORS['accent_green']};font-weight:600;"
+            f"font-size:11px;font-family:Consolas;"
+        )
+
+    def _ad_stop(self):
+        """Stop the AI auto-drive loop and return wheel to idle."""
+        self._ai.stop()
+        self._ad_status_lbl.setText("Stopped")
+        self._ad_status_lbl.setStyleSheet(
+            f"color:{COLORS['text_secondary']};font-size:11px;font-family:Consolas;"
+        )
+        self._ad_t_target.setText("—")
+        self._ad_t_mode.setText("—")
+
+    def _ad_estop(self):
+        """Emergency stop — halts AI and triggers system-wide E-stop."""
+        self._ai.stop()
+        self._do_estop()
+        self._ad_status_lbl.setText("⚠ DISENGAGED")
+        self._ad_status_lbl.setStyleSheet(
+            f"color:{COLORS['accent_red']};font-weight:700;"
+            f"font-size:11px;font-family:Consolas;"
+        )
+
+    def _ad_on_target(self, angle: float):
+        if hasattr(self, "_ad_t_target"):
+            self._ad_t_target.setText(f"{angle:.1f}°")
+
+    def _ad_on_mode(self, mode: str):
+        if hasattr(self, "_ad_t_mode"):
+            self._ad_t_mode.setText(mode)
 
     def _refresh_ports(self):
         cur = self._port_combo.currentText()

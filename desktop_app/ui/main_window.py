@@ -2,6 +2,10 @@
 desktop_app/ui/main_window.py
 Main application window: compact sidebar + persistent telemetry strip + stacked pages.
 Engineering/sim-racing dashboard aesthetic.
+
+NormalWheelPage receives beamng_manager so its built-in Auto Drive tab can
+initialise and start/stop the BeamNG AI drive without navigating to the
+dedicated BeamNG AI page.
 """
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
@@ -103,7 +107,7 @@ class MainWindow(QMainWindow):
         self._pages = {
             "dashboard":    DashboardPage(**kw, beamng_manager=self._beamng_manager,
                                           profiles=self._profiles),
-            "normal_wheel": NormalWheelPage(**kw),
+            "normal_wheel": NormalWheelPage(**kw, beamng_manager=self._beamng_manager),
             "tuning":       TuningPage(**kw),
             "calibration":  CalibrationPage(**kw),
             "tests_diag":   TestsDiagnosticsPage(**kw),
