@@ -18,13 +18,13 @@ BeamNG.tech / BeamNGpy
 
 ### Pipeline each tick
 
-1. **Sim step** — advance BeamNG physics  
-2. **Sensors** — read front camera (colour + depth), electrics, damage, g-forces  
-3. **Perception** — OpenCV lane detection, depth-based obstacle check, state estimation  
-4. **Planning** — behavior mode (DRIVE / EMERGENCY / STOPPED), path target, speed target  
-5. **Control** — PID steering, PID speed → throttle/brake, safety arbiter  
-6. **Actuation** — send commands to BeamNG vehicle  
-7. **Debug** — live overlay window, CSV logging, optional frame saves  
+1. **Sim step** — advance BeamNG physics
+2. **Sensors** — read front camera (colour + depth), electrics, damage, g-forces
+3. **Perception** — OpenCV lane detection, depth-based obstacle check, state estimation
+4. **Planning** — behavior mode (DRIVE / EMERGENCY / STOPPED), path target, speed target
+5. **Control** — PID steering, PID speed → throttle/brake, safety arbiter
+6. **Actuation** — send commands to BeamNG vehicle
+7. **Debug** — live overlay window, CSV logging, optional frame saves
 
 ---
 
@@ -58,6 +58,7 @@ autonomy_project/
 │   ├── image_utils.py
 │   ├── math_utils.py
 │   ├── debug_overlay.py      # live OpenCV debug HUD
+│   ├── steering_output.py    # serial hook for DIY steering wheel
 │   └── timers.py
 ├── scripts/
 │   ├── run_demo.py           # CLI launcher with overrides
@@ -71,11 +72,11 @@ autonomy_project/
 
 ## Prerequisites
 
-| Requirement | Notes |
-|---|---|
-| **BeamNG.tech** | Licensed research/educational version. Install and note the install path. |
-| **Python 3.10+** | 3.11 or 3.12 recommended. |
-| **pip** | For installing dependencies. |
+| Requirement      | Notes                                                                     |
+| ---------------- | ------------------------------------------------------------------------- |
+| **BeamNG.tech**  | Licensed research/educational version. Install and note the install path. |
+| **Python 3.10+** | 3.11 or 3.12 recommended.                                                 |
+| **pip**          | For installing dependencies.                                              |
 
 ---
 
@@ -152,18 +153,50 @@ python -m pytest tests/ -v
 ## What is confirmed vs assumed
 
 ### Confirmed (based on BeamNGpy docs)
-- `BeamNGpy` connection, `Scenario`, `Vehicle` creation  
-- `Camera` sensor with colour + depth  
-- `Electrics`, `Damage`, `GForces` sensors  
-- `vehicle.control(steering=, throttle=, brake=)` for actuation  
-- Paused stepping with `bng.control.step(n)`  
+
+- `BeamNGpy` connection, `Scenario`, `Vehicle` creation
+- `Camera` sensor with colour + depth
+- `Electrics`, `Damage`, `GForces` sensors
+- `vehicle.control(steering=, throttle=, brake=)` for actuation
+- Paused stepping with `bng.control.step(n)`
 
 ### Assumed / may need adjustment
+
 - **Camera sensor API**: The exact constructor args (especially `pos`, `dir`, `near_far_planes`) may vary between BeamNGpy versions. If the camera doesn't render, check the BeamNGpy changelog and adjust `sensors.py`.
 - **Spawn coordinates**: The default spawn position is for `west_coast_usa`. You may need to adjust for your BeamNG.tech version or preferred map.
 - **HSV thresholds**: The road-colour mask is tuned for typical grey asphalt with default BeamNG lighting. Run `calibrate_sensors.py` to retune.
 - **Sensor data format**: `cam.poll()` return structure may differ across versions; the code handles the most common formats.
 - **Depth image units**: Assumed to be metres. If the values look wrong, check BeamNGpy docs.
+
+---
+
+## DIY Steering Wheel Integration
+
+The codebase includes `utils/steering_output.py` — a hook for sending steering commands to an external microcontroller (Arduino, ESP32, etc.) over serial USB.
+
+### How it works
+
+1. The control arbiter produces a `ControlCommand` with `steering` in [-1.0, +1.0].
+2. `SteeringOutput.send(steering)` writes the value to a serial port as `S+0.3250\n`.
+3. Your microcontroller reads this and drives the force-feedback motor.
+
+### To enable it
+
+1. Install pyserial: `pip install pyserial`
+2. In `main.py` or `control_arbiter.py`, add:
+   ```python
+   from utils.steering_output import SteeringOutput
+   wheel = SteeringOutput(port="COM3", baudrate=115200, enabled=True)
+   # In the main loop after computing cmd:
+   wheel.send(cmd.steering)
+   ```
+3. Adjust the serial protocol in `steering_output.py` to match your firmware.
+
+### Future modes
+
+- **AI drives, wheel follows**: wheel reflects the autonomous steering target.
+- **Human drives, AI coaches**: read wheel input via serial, compare to AI target, give feedback.
+- **Shared control**: blend human input with AI output in `control_arbiter.py`.
 
 ---
 
@@ -183,14 +216,14 @@ python -m pytest tests/ -v
 
 ## Design Decisions
 
-| Decision | Rationale |
-|---|---|
+| Decision                   | Rationale                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | Classical CV first, not ML | Faster to debug, no training data needed, easy to understand for a student project. ML can be layered on later. |
-| PID controllers | Simple, well-understood, tunable. Good enough for lane following; upgrade to MPC when needed. |
-| Dataclass configs | Centralized, type-hinted, easy to override from CLI. No YAML/JSON parsing needed for v1. |
-| Paused stepping | Guarantees deterministic ticks — perception always gets fresh data before control runs. |
-| Separate arbiter | Single point for safety overrides, manual e-stop, and future shared control. |
-| CSV + frame logging | Lightweight, no extra dependencies. Enables offline replay and debugging. |
+| PID controllers            | Simple, well-understood, tunable. Good enough for lane following; upgrade to MPC when needed.                   |
+| Dataclass configs          | Centralized, type-hinted, easy to override from CLI. No YAML/JSON parsing needed for v1.                        |
+| Paused stepping            | Guarantees deterministic ticks — perception always gets fresh data before control runs.                         |
+| Separate arbiter           | Single point for safety overrides, manual e-stop, and future shared control.                                    |
+| CSV + frame logging        | Lightweight, no extra dependencies. Enables offline replay and debugging.                                       |
 
 ---
 

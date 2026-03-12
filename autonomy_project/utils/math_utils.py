@@ -28,5 +28,18 @@ def kph_to_mps(kph: float) -> float:
     return kph / 3.6
 
 
+def angle_diff(a: float, b: float) -> float:
+    """Signed difference a - b, wrapped to [-180, 180]."""
+    return wrap_angle(a - b)
+
+
+def moving_average(values: list, window: int = 5) -> float:
+    """Return mean of the last `window` entries, or 0 if empty."""
+    if not values:
+        return 0.0
+    tail = values[-window:]
+    return sum(tail) / len(tail)
+
+
 def distance_2d(a: tuple, b: tuple) -> float:
     return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)

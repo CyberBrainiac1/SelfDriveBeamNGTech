@@ -6,3 +6,9 @@ numpy>=1.24
 # Optional but recommended
 matplotlib>=3.7       # for offline plot scripts
 Pillow>=10.0          # BeamNGpy uses PIL internally
+
+# Testing
+pytest>=7.0
+
+# Hardware integration (uncomment when you have a steering wheel controller)
+# pyserial>=3.5
