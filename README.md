@@ -45,10 +45,14 @@ The bootstrap/setup scripts auto-detect the current Windows user via environment
 
 ## Quick Start (Copy/Paste)
 
-Run these commands exactly, from any location (even `C:\WINDOWS\system32`):
+Run these commands from the repository root:
 
 ```powershell
-cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
+# If needed, clone first (user path example):
+# git clone https://github.com/CyberBrainiac1/SelfDriveBeamNGTech.git "$env:USERPROFILE\SelfDrive\SelfDriveBeamNGTech"
+
+# Go to your local clone path (adjust if different)
+cd "$env:USERPROFILE\SelfDrive\SelfDriveBeamNGTech"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r .\requirements.txt
@@ -63,10 +67,10 @@ python .\main.py --mode classical --debug
 
 ## Even Easier: One-Command PowerShell Scripts
 
-From repository root:
+From your repository root:
 
 ```powershell
-cd "C:\Users\emmad\Downloads\CodeP\SelfDriveBeamNGTech"
+cd "$env:USERPROFILE\SelfDrive\SelfDriveBeamNGTech"
 ```
 
 Setup Python environment and dependencies:
