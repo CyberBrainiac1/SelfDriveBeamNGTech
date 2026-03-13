@@ -50,7 +50,7 @@ from agents.base_agent import Observation
 from capture.screen_capture import ScreenCapture
 from capture.ac_state_reader import ACStateReader
 from control.control_arbiter import ControlArbiter, ControlCommand
-from control.direct_keys import release_all
+from control.direct_keys import release_all, focus_assetto_window
 from track.lap_tracker import LapTracker
 from utils.metrics_logger import MetricsLogger
 from utils.timers import RateLimiter, FPSCounter
@@ -106,6 +106,8 @@ def main() -> None:
     time.sleep(3)
 
     prev_laps = 0
+    no_input_frames = 0
+    last_input_warn_t = 0.0
     print(f"[main] Running.  Target speed: {CFG.speed.target_kph:.0f} kph  |  Press Ctrl+C to stop.")
     try:
         with capture:
@@ -138,6 +140,22 @@ def main() -> None:
 
                 # ── Act ───────────────────────────────────────────
                 arbiter.apply(cmd)
+
+                # Input health warning: commanded throttle is high but AC telemetry
+                # shows almost no pedal or speed, so controls may not be reaching the game.
+                if cmd.throttle > 0.5 and state.gas < 0.05 and state.speed_kph < 1.0:
+                    no_input_frames += 1
+                else:
+                    no_input_frames = 0
+
+                if no_input_frames >= 90 and (time.monotonic() - last_input_warn_t) > 5.0:
+                    focused = focus_assetto_window()
+                    print(
+                        "\n[warn] Throttle command is high but telemetry gas/speed stay near zero. "
+                        "Focus AC window, verify controls mapping, and try 'autoac mode -Value keys'. "
+                        f"auto-focus attempted={focused}"
+                    )
+                    last_input_warn_t = time.monotonic()
 
                 # ── Track progress (l2r-style) ────────────────────
                 reward = tracker.update(

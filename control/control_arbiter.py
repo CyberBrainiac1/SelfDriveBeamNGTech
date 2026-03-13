@@ -12,8 +12,8 @@ from dataclasses import dataclass
 
 from config import CFG
 from control.direct_keys import (
-    press, release, release_all,
-    W, A, S, D,
+    press, release, press_arrow, release_arrow, release_all,
+    W, A, S, D, UP, LEFT, DOWN, RIGHT,
 )
 from control.vjoy_output import VJoyOutput
 from control.steering_controller import SteeringController
@@ -89,24 +89,41 @@ class ControlArbiter:
         brk = cmd.brake
         steer = cmd.steering
 
-        # Throttle / brake
-        if thr > cfg.gas_key_threshold:
+        # Throttle / brake arbitration:
+        # never hold W and S together in keyboard mode.
+        pedal_deadband = 0.05
+        throttle_active = thr > cfg.gas_key_threshold
+        brake_active = brk > cfg.gas_key_threshold
+
+        if throttle_active and (not brake_active or thr >= brk + pedal_deadband):
             press(W)
+            press_arrow(UP)
+            release(S)
+            release_arrow(DOWN)
+        elif brake_active and (not throttle_active or brk > thr + pedal_deadband):
+            press(S)
+            press_arrow(DOWN)
+            release(W)
+            release_arrow(UP)
         else:
             release(W)
-
-        if brk > cfg.gas_key_threshold:
-            press(S)
-        else:
             release(S)
+            release_arrow(UP)
+            release_arrow(DOWN)
 
         # Steering
         if steer < -cfg.steer_key_threshold:
             press(A)
+            press_arrow(LEFT)
             release(D)
+            release_arrow(RIGHT)
         elif steer > cfg.steer_key_threshold:
             press(D)
+            press_arrow(RIGHT)
             release(A)
+            release_arrow(LEFT)
         else:
             release(A)
             release(D)
+            release_arrow(LEFT)
+            release_arrow(RIGHT)

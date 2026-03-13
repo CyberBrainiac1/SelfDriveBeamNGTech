@@ -101,6 +101,7 @@ if ($allowedCommands -notcontains $Command) {
 $configPath = Join-Path $repoRoot 'config.py'
 $logsPath = Join-Path $repoRoot 'logs'
 $statePath = Join-Path $env:USERPROFILE 'Documents\Assetto Corsa\logs\acdriver_state.json'
+$controlsIniPath = Join-Path $env:USERPROFILE 'Documents\Assetto Corsa\cfg\controls.ini'
 
 function Get-DefaultGameRoot {
     $candidates = @(
@@ -147,6 +148,13 @@ function Show-Status {
     $gameAppExists = if ($gameAppPath) { Test-Path $gameAppPath } else { $false }
     $documentsAppExists = Test-Path $documentsAppPath
     $gameRootText = if ([string]::IsNullOrWhiteSpace($gameRoot)) { '<not detected>' } else { $gameRoot }
+    $stateExists = Test-Path $statePath
+    $stateAgeSec = $null
+    $stateFresh = $false
+    if ($stateExists) {
+        $stateAgeSec = [int]((Get-Date) - (Get-Item $statePath).LastWriteTime).TotalSeconds
+        $stateFresh = $stateAgeSec -le 2
+    }
 
     Write-Host "User              : $env:USERNAME"
     Write-Host "User profile      : $env:USERPROFILE"
@@ -156,7 +164,11 @@ function Show-Status {
     Write-Host "Git available     : $([bool](Get-Command git -ErrorAction SilentlyContinue))"
     Write-Host "AC app in game dir: $gameAppExists"
     Write-Host "AC app in Documents: $documentsAppExists"
-    Write-Host "State file exists : $(Test-Path $statePath)"
+    Write-Host "State file exists : $stateExists"
+    if ($stateExists) {
+        Write-Host "State fresh (<=2s): $stateFresh"
+        Write-Host "State age seconds : $stateAgeSec"
+    }
     Write-Host "Logs folder exists: $(Test-Path $logsPath)"
 }
 
@@ -179,8 +191,49 @@ function Run-Doctor {
     }
     if (-not (Test-Path $statePath)) {
         Write-Host "[doctor] Telemetry file not found yet. Start AC and drive briefly."
+    } else {
+        $ageSec = [int]((Get-Date) - (Get-Item $statePath).LastWriteTime).TotalSeconds
+        if ($ageSec -gt 2) {
+            Write-Host "[doctor] Telemetry file is stale (${ageSec}s old). Enter a live driving session."
+        }
+    }
+    if (Test-Path $controlsIniPath) {
+        $controlsRaw = Get-Content $controlsIniPath -Raw
+        if ($controlsRaw -match 'COMBINE_WITH_KEYBOARD_CONTROL=0') {
+            Write-Host "[doctor] AC keyboard combine is OFF in controls.ini. Keyboard bot input may be ignored."
+            Write-Host "[doctor] Run any drive command (autoac run/drive/neural) and it will auto-fix this."
+        }
+        if ($controlsRaw -match 'INPUT_METHOD=X360|INPUT_METHOD=WHEEL') {
+            Write-Host "[doctor] AC input method is not KEYBOARD in controls.ini. Keyboard bot input may be ignored."
+        }
     }
     Write-Host "[doctor] Done."
+}
+
+function Ensure-AcKeyboardControl {
+    if (-not (Test-Path $controlsIniPath)) {
+        return
+    }
+
+    $raw = Get-Content $controlsIniPath -Raw
+    $updated = $raw
+    $changedInputMethod = $false
+    $updated = [regex]::Replace($updated, 'COMBINE_WITH_KEYBOARD_CONTROL=0', 'COMBINE_WITH_KEYBOARD_CONTROL=1')
+    if ($updated -match '(?m)^INPUT_METHOD=(?!KEYBOARD).*$') {
+        $changedInputMethod = $true
+    }
+    $updated = [regex]::Replace($updated, '(?m)^INPUT_METHOD=.*$', 'INPUT_METHOD=KEYBOARD')
+
+    if ($updated -ne $raw) {
+        Set-Content -Path $controlsIniPath -Value $updated -NoNewline
+        Write-Host "[autoac] Updated controls.ini for keyboard bot input (INPUT_METHOD=KEYBOARD, COMBINE_WITH_KEYBOARD_CONTROL=1)"
+        if ($changedInputMethod) {
+            $acRunning = Get-Process -Name AssettoCorsa -ErrorAction SilentlyContinue
+            if ($acRunning) {
+                Write-Host "[autoac] Restart Assetto Corsa once so INPUT_METHOD change is applied."
+            }
+        }
+    }
 }
 
 switch ($Command) {
@@ -228,6 +281,7 @@ switch ($Command) {
         break
     }
     'run' {
+        Ensure-AcKeyboardControl
         $args = @()
         if ($Ui) { $args += '-DebugView' }
         if ($null -ne $TargetSpeed) { $args += @('-TargetSpeed', $TargetSpeed) }
@@ -235,6 +289,7 @@ switch ($Command) {
         break
     }
     'drive' {
+        Ensure-AcKeyboardControl
         $args = @()
         if ($Ui) { $args += '-DebugView' }
         if ($null -ne $TargetSpeed) { $args += @('-TargetSpeed', $TargetSpeed) }
@@ -242,6 +297,7 @@ switch ($Command) {
         break
     }
     'run-neural' {
+        Ensure-AcKeyboardControl
         $args = @()
         if ($Ui) { $args += '-DebugView' }
         if ($null -ne $TargetSpeed) { $args += @('-TargetSpeed', $TargetSpeed) }
@@ -249,6 +305,7 @@ switch ($Command) {
         break
     }
     'neural' {
+        Ensure-AcKeyboardControl
         $args = @()
         if ($Ui) { $args += '-DebugView' }
         if ($null -ne $TargetSpeed) { $args += @('-TargetSpeed', $TargetSpeed) }
