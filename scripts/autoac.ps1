@@ -101,7 +101,29 @@ if ($allowedCommands -notcontains $Command) {
 $configPath = Join-Path $repoRoot 'config.py'
 $logsPath = Join-Path $repoRoot 'logs'
 $statePath = Join-Path $env:USERPROFILE 'Documents\Assetto Corsa\logs\acdriver_state.json'
-$appPath = Join-Path $env:USERPROFILE 'Documents\Assetto Corsa\apps\python\ACDriverApp\ACDriverApp.py'
+
+function Get-DefaultGameRoot {
+    $candidates = @(
+        'C:\Program Files (x86)\Steam\steamapps\common\assettocorsa',
+        'C:\Program Files\Steam\steamapps\common\assettocorsa'
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+$gameRoot = Get-DefaultGameRoot
+$gameAppPath = if ($gameRoot) {
+    Join-Path $gameRoot 'apps\python\ACDriverApp\ACDriverApp.py'
+} else {
+    $null
+}
+$documentsAppPath = Join-Path $env:USERPROFILE 'Documents\Assetto Corsa\apps\python\ACDriverApp\ACDriverApp.py'
 
 function Show-Header([string]$text) {
     Write-Host ""
@@ -122,12 +144,18 @@ function Replace-ConfigLine([string]$pattern, [string]$replacement, [string]$lab
 }
 
 function Show-Status {
+    $gameAppExists = if ($gameAppPath) { Test-Path $gameAppPath } else { $false }
+    $documentsAppExists = Test-Path $documentsAppPath
+    $gameRootText = if ([string]::IsNullOrWhiteSpace($gameRoot)) { '<not detected>' } else { $gameRoot }
+
     Write-Host "User              : $env:USERNAME"
     Write-Host "User profile      : $env:USERPROFILE"
     Write-Host "Repo root         : $repoRoot"
+    Write-Host "AC game root      : $gameRootText"
     Write-Host "Python available  : $([bool](Get-Command python -ErrorAction SilentlyContinue))"
     Write-Host "Git available     : $([bool](Get-Command git -ErrorAction SilentlyContinue))"
-    Write-Host "AC app exists     : $(Test-Path $appPath)"
+    Write-Host "AC app in game dir: $gameAppExists"
+    Write-Host "AC app in Documents: $documentsAppExists"
     Write-Host "State file exists : $(Test-Path $statePath)"
     Write-Host "Logs folder exists: $(Test-Path $logsPath)"
 }
@@ -142,8 +170,12 @@ function Run-Doctor {
     if (-not (Test-Path (Join-Path $repoRoot '.venv\Scripts\Activate.ps1'))) {
         Write-Host "[doctor] .venv missing. Run: autoac setup"
     }
-    if (-not (Test-Path $appPath)) {
-        Write-Host "[doctor] AC app missing. Run: autoac install-app"
+    $hasGameInstall = if ($gameAppPath) { Test-Path $gameAppPath } else { $false }
+    if (-not $hasGameInstall) {
+        Write-Host "[doctor] AC app not found in game folder. Run: autoac install-app"
+        if (-not $gameRoot) {
+            Write-Host "[doctor] Could not detect Assetto Corsa install path automatically."
+        }
     }
     if (-not (Test-Path $statePath)) {
         Write-Host "[doctor] Telemetry file not found yet. Start AC and drive briefly."
@@ -157,7 +189,7 @@ switch ($Command) {
         Write-Host 'Setup & install:'
         Write-Host '  autoac setup                      # install Python (if needed), create venv, install deps'
         Write-Host '  autoac setup recreatevenv         # recreate .venv from scratch'
-        Write-Host '  autoac install-app                # copy AC app into Documents\Assetto Corsa\apps\python'
+        Write-Host '  autoac install-app                # copy AC app into AC game apps\python (and Documents fallback)'
         Write-Host '  autoac register-command           # register global autoac command in PowerShell profile'
         Write-Host ''
         Write-Host 'Run:'

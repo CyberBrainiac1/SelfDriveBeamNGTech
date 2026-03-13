@@ -93,6 +93,9 @@ Install AC telemetry app files:
 .\scripts\install_ac_app.ps1
 ```
 
+This installs ACDriverApp to the Assetto Corsa game folder `apps\python`
+(the location used by UI Modules), with a Documents fallback copy.
+
 Run classical mode:
 
 ```powershell
