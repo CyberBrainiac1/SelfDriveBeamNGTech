@@ -36,8 +36,7 @@ function Install-Launcher([string]$targetDir, [string]$dispatcherPath) {
     Set-Content -Path $cmdLauncher -Value $cmdText -Encoding ASCII
 
     $ps1Launcher = Join-Path $targetDir 'autoac.ps1'
-    $ps1Text = "param([Parameter(ValueFromRemainingArguments=`$true)][string[]]`$Args)`n" +
-               "& '$dispatcherPath' @Args`n"
+    $ps1Text = "& powershell -NoProfile -ExecutionPolicy Bypass -File '$dispatcherPath' @args`n"
     Set-Content -Path $ps1Launcher -Value $ps1Text -Encoding ASCII
 
     Write-Host "[register] Installed launchers:"

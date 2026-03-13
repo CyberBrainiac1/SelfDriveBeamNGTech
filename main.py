@@ -88,7 +88,7 @@ def main() -> None:
 
     # ── Build components ──────────────────────────────────────────
     agent        = _build_agent(args.mode)
-    capture      = ScreenCapture(CFG.capture)
+    capture      = ScreenCapture()
     state_reader = ACStateReader(CFG.paths.state_file)
     arbiter      = ControlArbiter()
     tracker      = LapTracker()

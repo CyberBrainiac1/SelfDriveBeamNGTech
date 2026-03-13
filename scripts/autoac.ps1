@@ -1,28 +1,102 @@
+[CmdletBinding()]
 param(
-    [Parameter(Position = 0)]
-    [ValidateSet(
-        'help','setup','install-app',
-        'run','drive','run-neural','neural',
-        'collect','train',
-        'status','doctor',
-        'logs','tail-state',
-        'config-show','mode','speed',
-        'update','register-command'
-    )]
-    [string]$Command = 'help',
-
-    [double]$TargetSpeed,
-    [switch]$DebugView,
-    [int]$Epochs = 30,
-    [int]$BatchSize = 32,
-    [switch]$RecreateVenv,
-    [string]$Value,
-    [int]$Lines = 40
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$CliArgs
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+
+# Parse CLI args manually for reliable behavior across wrappers.
+$allowedCommands = @(
+    'help','setup','install-app',
+    'run','drive','run-neural','neural',
+    'collect','train',
+    'status','doctor',
+    'logs','tail-state',
+    'config-show','mode','speed',
+    'update','register-command'
+)
+
+$Command = 'help'
+$TargetSpeed = $null
+$Ui = $false
+$Epochs = 30
+$BatchSize = 32
+$RecreateVenv = $false
+$Value = $null
+$Lines = 40
+
+$tokens = @($CliArgs)
+if ($tokens.Count -gt 0 -and -not $tokens[0].StartsWith('-')) {
+    $Command = $tokens[0].ToLowerInvariant()
+    $tokens = if ($tokens.Count -gt 1) { @($tokens[1..($tokens.Count - 1)]) } else { @() }
+}
+if ($tokens -is [string]) {
+    $tokens = @($tokens)
+}
+
+# Some launcher paths can split switch tokens into '-' + 'Name'. Recombine.
+$normalized = @()
+for ($j = 0; $j -lt $tokens.Count; $j++) {
+    if ($tokens[$j] -eq '-' -and $j + 1 -lt $tokens.Count) {
+        $normalized += ,('-' + $tokens[$j + 1])
+        $j++
+    } else {
+        $normalized += ,$tokens[$j]
+    }
+}
+$tokens = $normalized
+if ($tokens -is [string]) {
+    $tokens = @($tokens)
+}
+
+for ($i = 0; $i -lt $tokens.Count; $i++) {
+    $t = $tokens[$i]
+    switch -Regex ($t) {
+        '^-$' { $Ui = $true; continue }  # fallback when launcher strips switch names
+        '^(-)?(Ui|Debug|DebugView)$' { $Ui = $true; continue }
+        '^(-)?RecreateVenv$' { $RecreateVenv = $true; continue }
+        '^-TargetSpeed$' {
+            if ($i + 1 -ge $tokens.Count) { throw 'Missing value for -TargetSpeed' }
+            $i++
+            $TargetSpeed = [double]$tokens[$i]
+            continue
+        }
+        '^-Epochs$' {
+            if ($i + 1 -ge $tokens.Count) { throw 'Missing value for -Epochs' }
+            $i++
+            $Epochs = [int]$tokens[$i]
+            continue
+        }
+        '^-BatchSize$' {
+            if ($i + 1 -ge $tokens.Count) { throw 'Missing value for -BatchSize' }
+            $i++
+            $BatchSize = [int]$tokens[$i]
+            continue
+        }
+        '^-Value$' {
+            if ($i + 1 -ge $tokens.Count) { throw 'Missing value for -Value' }
+            $i++
+            $Value = $tokens[$i]
+            continue
+        }
+        '^-Lines$' {
+            if ($i + 1 -ge $tokens.Count) { throw 'Missing value for -Lines' }
+            $i++
+            $Lines = [int]$tokens[$i]
+            continue
+        }
+        default {
+            throw "Unknown argument: $t (run 'autoac help')"
+        }
+    }
+}
+
+if ($allowedCommands -notcontains $Command) {
+    throw "Unknown command '$Command' (run 'autoac help')"
+}
 
 $configPath = Join-Path $repoRoot 'config.py'
 $logsPath = Join-Path $repoRoot 'logs'
@@ -82,14 +156,15 @@ switch ($Command) {
         Show-Header "AUTOAC HELP"
         Write-Host 'Setup & install:'
         Write-Host '  autoac setup                      # install Python (if needed), create venv, install deps'
+        Write-Host '  autoac setup recreatevenv         # recreate .venv from scratch'
         Write-Host '  autoac install-app                # copy AC app into Documents\Assetto Corsa\apps\python'
         Write-Host '  autoac register-command           # register global autoac command in PowerShell profile'
         Write-Host ''
         Write-Host 'Run:'
-        Write-Host '  autoac run -DebugView            # run classical mode'
-        Write-Host '  autoac drive -DebugView          # alias for run'
-        Write-Host '  autoac run-neural -DebugView     # run neural mode'
-        Write-Host '  autoac neural -DebugView         # alias for run-neural'
+        Write-Host '  autoac run ui                    # run classical mode + debug window'
+        Write-Host '  autoac drive ui                  # alias for run'
+        Write-Host '  autoac run-neural ui             # run neural mode + debug window'
+        Write-Host '  autoac neural ui                 # alias for run-neural'
         Write-Host ''
         Write-Host 'Training:'
         Write-Host '  autoac collect                   # collect data'
@@ -122,29 +197,29 @@ switch ($Command) {
     }
     'run' {
         $args = @()
-        if ($DebugView) { $args += '-DebugView' }
-        if ($PSBoundParameters.ContainsKey('TargetSpeed')) { $args += @('-TargetSpeed', $TargetSpeed) }
+        if ($Ui) { $args += '-DebugView' }
+        if ($null -ne $TargetSpeed) { $args += @('-TargetSpeed', $TargetSpeed) }
         & .\scripts\run_classical.ps1 @args
         break
     }
     'drive' {
         $args = @()
-        if ($DebugView) { $args += '-DebugView' }
-        if ($PSBoundParameters.ContainsKey('TargetSpeed')) { $args += @('-TargetSpeed', $TargetSpeed) }
+        if ($Ui) { $args += '-DebugView' }
+        if ($null -ne $TargetSpeed) { $args += @('-TargetSpeed', $TargetSpeed) }
         & .\scripts\run_classical.ps1 @args
         break
     }
     'run-neural' {
         $args = @()
-        if ($DebugView) { $args += '-DebugView' }
-        if ($PSBoundParameters.ContainsKey('TargetSpeed')) { $args += @('-TargetSpeed', $TargetSpeed) }
+        if ($Ui) { $args += '-DebugView' }
+        if ($null -ne $TargetSpeed) { $args += @('-TargetSpeed', $TargetSpeed) }
         & .\scripts\run_neural.ps1 @args
         break
     }
     'neural' {
         $args = @()
-        if ($DebugView) { $args += '-DebugView' }
-        if ($PSBoundParameters.ContainsKey('TargetSpeed')) { $args += @('-TargetSpeed', $TargetSpeed) }
+        if ($Ui) { $args += '-DebugView' }
+        if ($null -ne $TargetSpeed) { $args += @('-TargetSpeed', $TargetSpeed) }
         & .\scripts\run_neural.ps1 @args
         break
     }
@@ -203,7 +278,7 @@ switch ($Command) {
         break
     }
     'speed' {
-        if (-not $PSBoundParameters.ContainsKey('TargetSpeed')) {
+        if ($null -eq $TargetSpeed) {
             throw "Provide speed. Example: autoac speed -TargetSpeed 70"
         }
         Replace-ConfigLine 'target_kph:\s*float\s*=\s*[0-9]+(\.[0-9]+)?' ("target_kph: float = {0}" -f $TargetSpeed) 'target speed'

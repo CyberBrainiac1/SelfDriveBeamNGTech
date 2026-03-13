@@ -39,7 +39,7 @@ After bootstrap finishes:
 1. Open a new PowerShell window
 2. Run `autoac status`
 3. Start Assetto Corsa and enable ACDriverApp in UI Modules
-4. Run `autoac run -DebugView`
+4. Run `autoac run ui`
 
 If Python is missing, bootstrap auto-installs it for the current user.
 
@@ -62,10 +62,10 @@ Open a new terminal after setup, then use these simple commands:
 ```powershell
 autoac help
 autoac install-app
-autoac run -DebugView
-autoac drive -DebugView
-autoac run-neural -DebugView
-autoac neural -DebugView
+autoac run ui
+autoac drive ui
+autoac run-neural ui
+autoac neural ui
 autoac collect
 autoac train -Epochs 30 -BatchSize 32
 autoac status
