@@ -171,7 +171,7 @@ def main() -> None:
                         steering_cmd = cmd.steering,
                         throttle     = cmd.throttle,
                         brake        = cmd.brake,
-                        lap_progress = state.normalized_spline_pos,
+                        lap_progress = state.lap_progress,
                         reward       = reward,
                     )
 

@@ -43,7 +43,7 @@ class ClassicalAgent(AbstractAgent):
     def select_action(self, obs: Observation) -> ControlCommand:
         result: LaneDetectionResult = self.detector.detect(obs.frame)
 
-        if result.valid and result.confidence >= self._MIN_CONFIDENCE:
+        if result.confidence >= self._MIN_CONFIDENCE:
             steer_target    = result.offset
             self._fail_frames = 0
         else:
