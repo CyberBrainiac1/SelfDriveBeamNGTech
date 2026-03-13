@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 ACDriverApp.py
 ==============
@@ -62,13 +63,13 @@ def acMain(ac_version):
     ac.setSize(_app_id, 240, 90)
     ac.setTitle(_app_id, "ACDriver")
 
-    _lbl_status = ac.addLabel(_app_id, "Waiting…")
+    _lbl_status = ac.addLabel(_app_id, "Waiting...")
     ac.setPosition(_lbl_status, 5, 25)
 
     _lbl_speed = ac.addLabel(_app_id, "Speed: — kph")
     ac.setPosition(_lbl_speed, 5, 45)
 
-    _lbl_steer = ac.addLabel(_app_id, "Steer: —°")
+    _lbl_steer = ac.addLabel(_app_id, "Steer: -- deg")
     ac.setPosition(_lbl_steer, 5, 65)
 
     # Make sure the logs folder exists
@@ -115,7 +116,7 @@ def acUpdate(delta_t):
         # Update HUD labels (not every frame to save CPU)
         ac.setText(_lbl_status, "Logging OK")
         ac.setText(_lbl_speed,  "Speed: {:.0f} kph".format(spd))
-        ac.setText(_lbl_steer,  "Steer: {:.1f}°".format(strd))
+        ac.setText(_lbl_steer,  "Steer: {:.1f} deg".format(strd))
 
     except Exception as e:
         try:
