@@ -1,173 +1,111 @@
 # SelfDriveBeamNGTech
 
-Main project: autonomous driving for Assetto Corsa (this repository root).
+Autonomous self-driving system — **default: BeamNG.tech**.
 
-The older BeamNG project is still available in [autonomy_project/README.md](autonomy_project/README.md),
-but Assetto Corsa is now the default and primary stack.
+The project now ships a single Python script (`beamng_driver.py`) that runs
+directly inside **BeamNG.tech** using the BeamNGpy API.
+A legacy Assetto Corsa stack is still available via the `--ac` flag (see below).
 
-## First-Time Setup (No Assetto Corsa Installed Yet)
+---
 
-1. Install Steam
-2. Buy/install Assetto Corsa
-3. Install Git for Windows: https://git-scm.com/download/win
-4. Launch Assetto Corsa once so this folder exists:
+## Quick Start (BeamNG.tech — default)
+
+### 1. Install dependencies
+
+```powershell
+pip install -r requirements.txt
+```
+
+### 2. Set your BeamNG install path
+
+Open `beamng_driver.py` and edit the top-level constant:
+
+```python
+BEAMNG_HOME: str = r"C:\BeamNG.tech"   # ← set your install path here
+```
+
+Or pass it on the command line:
+
+```powershell
+python beamng_driver.py --beamng-home "C:\BeamNG.tech"
+```
+
+### 3. Run
+
+```powershell
+# Use the main entry point (defaults to BeamNG.tech)
+python main.py
+
+# Or run the single script directly
+python beamng_driver.py
+
+# Change target speed
+python beamng_driver.py --speed 60
+
+# Disable the live debug window
+python beamng_driver.py --no-overlay
+
+# All options
+python beamng_driver.py --help
+```
+
+**Keyboard shortcuts (debug window):**
+
+| Key | Action |
+|-----|--------|
+| `q` | Quit |
+| `e` | Toggle manual emergency stop |
+
+---
+
+## Legacy Assetto Corsa Mode
+
+If you want to run the original Assetto Corsa driver, add the `--ac` flag:
+
+```powershell
+# Classical CV (no model needed)
+python main.py --ac --mode classical
+
+# Neural mode (train first)
+python main.py --ac --mode neural --debug
+```
+
+Assetto Corsa must be running with the ACDriverApp Python app enabled.
+
+### One-Time Setup (Assetto Corsa)
+
+1. Install Steam and Assetto Corsa
+2. Install Git for Windows: https://git-scm.com/download/win
+3. Launch Assetto Corsa once so this folder exists:
 
 ```text
 %USERPROFILE%\Documents\Assetto Corsa\
 ```
 
-Python can now be installed automatically by bootstrap/setup scripts (via winget).
-
-## Fresh Machine (No Repo Cloned Yet)
-
-Default install (works from any folder, no hardcoded path):
-
 ```powershell
-irm https://raw.githubusercontent.com/CyberBrainiac1/SelfDriveBeamNGTech/main/scripts/clone_and_setup.ps1 -OutFile "$env:TEMP\clone_and_setup.ps1"
-& "$env:TEMP\clone_and_setup.ps1" -InstallRoot "$env:USERPROFILE\SelfDrive" -InstallAcApp
-```
-
-Admin install to Program Files:
-
-```powershell
-irm https://raw.githubusercontent.com/CyberBrainiac1/SelfDriveBeamNGTech/main/scripts/clone_and_setup.ps1 -OutFile "$env:TEMP\clone_and_setup.ps1"
-& "$env:TEMP\clone_and_setup.ps1" -InstallRoot "$env:ProgramFiles\SelfDrive" -InstallAcApp
-```
-
-After bootstrap finishes:
-
-1. Open a new PowerShell window
-2. Run `autoac status`
-3. Start Assetto Corsa and enable ACDriverApp in UI Modules
-4. Run `autoac run ui`
-
-If Python is missing, bootstrap auto-installs it for the current user.
-
-The bootstrap/setup scripts auto-detect the current Windows user via environment variables
-(`$env:USERNAME`, `$env:USERPROFILE`) so paths are user-specific automatically.
-
-## Even Easier: One-Command PowerShell Scripts
-
-If you are already inside a local clone, setup is:
-
-```powershell
+# Setup
 .\scripts\setup_windows.ps1
-```
 
-If Python is missing, setup will auto-install it first.
-
-This also registers a global `autoac` command in your PowerShell profile.
-Open a new terminal after setup, then use these simple commands:
-
-```powershell
-autoac help
-autoac install-app
-autoac run ui
-autoac drive ui
-autoac run-neural ui
-autoac neural ui
-autoac collect
-autoac train -Epochs 30 -BatchSize 32
-autoac status
-autoac doctor
-autoac config-show
-autoac mode -Value keys
-autoac mode -Value vjoy
-autoac speed -TargetSpeed 70
-autoac logs
-autoac tail-state -Lines 40
-autoac update
-```
-
-If `autoac` is not recognized, run this once from your clone folder:
-
-```powershell
-.\scripts\register_autoac_command.ps1
-```
-
-Then open a new terminal (or run `. $PROFILE`) and retry `autoac help`.
-
-Install AC telemetry app files:
-
-```powershell
+# Install telemetry app
 .\scripts\install_ac_app.ps1
-```
 
-This installs ACDriverApp to the Assetto Corsa game folder `apps\python`
-(the location used by UI Modules), with a Documents fallback copy.
-
-Run classical mode:
-
-```powershell
+# Run classical mode
 .\scripts\run_classical.ps1 -DebugView
-```
 
-Run neural mode:
-
-```powershell
-.\scripts\run_neural.ps1 -DebugView
-```
-
-Collect training data:
-
-```powershell
+# Collect training data
 .\scripts\collect_data.ps1
-```
 
-Train model:
-
-```powershell
+# Train model
 .\scripts\train_model.ps1 -Epochs 30 -BatchSize 32
 ```
 
-If PowerShell blocks activation, run this once then retry:
+See the full AC setup details in [autonomy_project/README.md](autonomy_project/README.md).
 
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-```
+---
 
-## In-Game Setup (Required)
-
-1. Open Assetto Corsa
-2. Go to Options -> General -> UI Modules
-3. Enable ACDriverApp
-4. Start a practice session
-
-Verify telemetry file is updating while driving:
-
-```powershell
-Test-Path "$env:USERPROFILE\Documents\Assetto Corsa\logs\acdriver_state.json"
-```
-
-## Control Modes
+## Control Modes (AC legacy)
 
 Edit [config.py](config.py):
 
 - `mode = "keys"` for easiest first run
 - `mode = "vjoy"` for smoother analog control (recommended after first run)
-
-vJoy optional setup:
-
-1. Install from https://github.com/jshafer817/vJoy/releases
-2. Enable X, Y, Z axes in vJoyConf
-3. Bind those axes in Assetto Corsa controls
-
-## Neural Mode
-
-Collect data:
-
-```powershell
-python .\scripts\collect_data.py
-```
-
-Train model:
-
-```powershell
-python .\scripts\train.py --epochs 30 --batch-size 32
-```
-
-Run neural driver:
-
-```powershell
-python .\main.py --mode neural --debug
-```

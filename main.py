@@ -1,93 +1,123 @@
 """
 main.py
 =======
-AC Driver — main inference loop.
+Entry point — defaults to BeamNG.tech autonomous driving.
 
-Modes
------
-  classical   Lane detection via OpenCV → PID steering (no ML, works immediately)
-  neural      NVIDIA CNN inference → PID speed control  (requires trained model)
-
-Architecture (inspired by learn-to-race/l2r)
---------------------------------------------
-  Observation   ← captures frame + AC telemetry every tick
-       ↓
-  AbstractAgent.select_action(obs) → ControlCommand
-       ↓             (ClassicalAgent or NeuralAgent)
-  ControlArbiter.apply(cmd)   → vJoy / WASD keys
-       ↓
-  LapTracker.update(...)      → per-tick reward, lap completion
-  MetricsLogger.record_tick() → CSV logging
+This script runs beamng_driver.py, the single-file BeamNG.tech driver.
 
 Usage
 -----
-  # Classical (no model needed — works immediately)
-    python main.py --mode classical
+  # BeamNG.tech (default)
+    python main.py
 
-  # Neural (train model first with scripts/train.py)
-    python main.py --mode neural
+  # Override speed or map
+    python main.py --speed 50 --map west_coast_usa
 
-  # Override config at runtime
-    python main.py --mode classical --target-speed 60 --debug
+  # Disable the live debug window
+    python main.py --no-overlay
 
-Prerequisite
-------------
-  Assetto Corsa must be running with the ACDriverApp Python app enabled.
+  # Point to a custom BeamNG install
+    python main.py --beamng-home "C:\\BeamNG.tech"
+
+  # Legacy Assetto Corsa driver (classical or neural mode)
+    python main.py --ac --mode classical
+    python main.py --ac --mode neural
+
+Prerequisites (BeamNG mode)
+----------------------------
+  pip install beamngpy opencv-python numpy
+  BeamNG.tech must be installed (research/educational licence).
+  See autonomy_project/README.md for details.
+
+Prerequisites (Assetto Corsa legacy mode)
+-----------------------------------------
+  pip install mss opencv-python numpy
+  Assetto Corsa must be running with ACDriverApp enabled.
   See README.md for full setup instructions.
 """
 
 from __future__ import annotations
 import argparse
-import sys
-import time
-import cv2
-
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sys
 
-from config import CFG
-from agents.base_agent import Observation
-from capture.screen_capture import ScreenCapture
-from capture.ac_state_reader import ACStateReader
-from control.control_arbiter import ControlArbiter, ControlCommand
-from control.direct_keys import release_all, focus_assetto_window
-from track.lap_tracker import LapTracker
-from utils.metrics_logger import MetricsLogger
-from utils.timers import RateLimiter, FPSCounter
-from utils.debug_overlay import draw_hud
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Assetto Corsa autonomous driver")
-    p.add_argument("--mode", choices=["classical", "neural"],
-                   default="classical", help="Control strategy (default: classical)")
+    p = argparse.ArgumentParser(
+        description="Autonomous driver — defaults to BeamNG.tech"
+    )
+    # BeamNG flags
+    p.add_argument("--beamng-home", default=None,
+                   help="Path to BeamNG.tech install folder")
+    p.add_argument("--host", default="localhost", help="BeamNG host (default: localhost)")
+    p.add_argument("--port", type=int, default=64256, help="BeamNG port (default: 64256)")
+    p.add_argument("--speed", type=float, default=40.0,
+                   help="Target cruise speed in kph (default: 40)")
+    p.add_argument("--map", default="west_coast_usa", help="BeamNG map name")
+    p.add_argument("--vehicle", default="etk800", help="BeamNG vehicle model")
+    p.add_argument("--no-overlay", action="store_true",
+                   help="Disable the live debug window")
+
+    # Legacy AC mode
+    p.add_argument("--ac", action="store_true",
+                   help="Run legacy Assetto Corsa driver instead of BeamNG.tech")
+    p.add_argument("--mode", choices=["classical", "neural"], default="classical",
+                   help="AC driver mode (only used with --ac)")
     p.add_argument("--target-speed", type=float, default=None,
-                   help="Override target speed in kph")
+                   help="Override target speed for AC mode")
     p.add_argument("--debug", action="store_true",
-                   help="Show OpenCV debug window")
+                   help="Show debug window in AC mode")
     p.add_argument("--no-log", action="store_true",
-                   help="Disable CSV metrics logging")
+                   help="Disable CSV logging in AC mode")
     return p.parse_args()
 
 
-def _build_agent(mode: str):
-    if mode == "classical":
-        from agents.classical_agent import ClassicalAgent
-        print("[main] Mode: classical (lane detection + PID)")
-        return ClassicalAgent()
-    else:
-        from agents.neural_agent import NeuralAgent
-        print(f"[main] Mode: neural  (CNN model: {CFG.training.model_path})")
-        return NeuralAgent()
+def _run_beamng(args: argparse.Namespace) -> None:
+    """Launch the BeamNG.tech single-file driver."""
+    import beamng_driver
+
+    # Patch sys.argv so beamng_driver._parse_args() sees the right flags
+    new_argv = [sys.argv[0]]
+    if args.beamng_home:
+        new_argv += ["--beamng-home", args.beamng_home]
+    new_argv += ["--host", args.host, "--port", str(args.port)]
+    new_argv += ["--speed", str(args.speed)]
+    new_argv += ["--map", args.map, "--vehicle", args.vehicle]
+    if args.no_overlay:
+        new_argv.append("--no-overlay")
+    sys.argv = new_argv
+    beamng_driver.main()
 
 
-def main() -> None:
-    args = _parse_args()
+def _run_ac(args: argparse.Namespace) -> None:
+    """Launch the legacy Assetto Corsa driver."""
+    import time
+    import cv2
+    from config import CFG
+    from agents.base_agent import Observation
+    from capture.screen_capture import ScreenCapture
+    from capture.ac_state_reader import ACStateReader
+    from control.control_arbiter import ControlArbiter, ControlCommand
+    from control.direct_keys import release_all, focus_assetto_window
+    from track.lap_tracker import LapTracker
+    from utils.metrics_logger import MetricsLogger
+    from utils.timers import RateLimiter, FPSCounter
+    from utils.debug_overlay import draw_hud
+
     if args.target_speed is not None:
         CFG.speed.target_kph = args.target_speed
 
-    # ── Build components ──────────────────────────────────────────
-    agent        = _build_agent(args.mode)
+    if args.mode == "classical":
+        from agents.classical_agent import ClassicalAgent
+        print("[main] AC mode: classical (lane detection + PID)")
+        agent = ClassicalAgent()
+    else:
+        from agents.neural_agent import NeuralAgent
+        print(f"[main] AC mode: neural (CNN model: {CFG.training.model_path})")
+        agent = NeuralAgent()
+
     capture      = ScreenCapture()
     state_reader = ACStateReader(CFG.paths.state_file)
     arbiter      = ControlArbiter()
@@ -97,7 +127,6 @@ def main() -> None:
     rate         = RateLimiter(CFG.capture.loop_hz)
     fps          = FPSCounter()
 
-    # ── Wait for game ─────────────────────────────────────────────
     print("[main] Waiting for Assetto Corsa telemetry…")
     if not state_reader.wait_for_game(timeout_s=60):
         print("[main] Timed out — is the ACDriverApp active in-game?")
@@ -112,7 +141,6 @@ def main() -> None:
     try:
         with capture:
             while True:
-                # ── Sense ─────────────────────────────────────────
                 frame = capture.grab()
                 state = state_reader.read()
 
@@ -129,20 +157,14 @@ def main() -> None:
                     valid        = state.valid,
                 )
 
-                # ── Safety e-stop ─────────────────────────────────
                 if state.speed_kph > CFG.safety.max_speed_kph or not state.valid:
                     arbiter.apply(ControlCommand(brake=1.0))
                     rate.wait()
                     continue
 
-                # ── Think (agent) ─────────────────────────────────
                 cmd = agent.select_action(obs)
-
-                # ── Act ───────────────────────────────────────────
                 arbiter.apply(cmd)
 
-                # Input health warning: commanded throttle is high but AC telemetry
-                # shows almost no pedal or speed, so controls may not be reaching the game.
                 if cmd.throttle > 0.5 and state.gas < 0.05 and state.speed_kph < 1.0:
                     no_input_frames += 1
                 else:
@@ -157,21 +179,18 @@ def main() -> None:
                     )
                     last_input_warn_t = time.monotonic()
 
-                # ── Track progress (l2r-style) ────────────────────
                 reward = tracker.update(
                     spline_pos = state.lap_progress,
                     speed_kph  = state.speed_kph,
                     steer_norm = state.steer_norm,
                 )
 
-                # Lap completion hook
                 if tracker.laps_completed > prev_laps:
                     prev_laps = tracker.laps_completed
                     agent.on_lap_complete(tracker.last_metrics.lap_time)
                     if metrics and tracker.last_metrics:
                         metrics.record_lap(tracker.last_metrics)
 
-                # Stuck / wrong-way / timeout check
                 done, reason = tracker.is_terminal()
                 if done:
                     print(f"\n[main] Episode ended: {reason}")
@@ -181,7 +200,6 @@ def main() -> None:
                     prev_laps = 0
                     time.sleep(2)
 
-                # ── Log ───────────────────────────────────────────
                 if metrics:
                     metrics.record_tick(
                         speed_kph    = state.speed_kph,
@@ -193,7 +211,6 @@ def main() -> None:
                         reward       = reward,
                     )
 
-                # ── Debug overlay ─────────────────────────────────
                 if args.debug:
                     vis = draw_hud(
                         frame,
@@ -229,6 +246,14 @@ def main() -> None:
         if metrics:
             metrics.close()
         print("[main] Shutdown complete.")
+
+
+def main() -> None:
+    args = _parse_args()
+    if args.ac:
+        _run_ac(args)
+    else:
+        _run_beamng(args)
 
 
 if __name__ == "__main__":
