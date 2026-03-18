@@ -55,6 +55,26 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--port", type=int, default=64256, help="BeamNG port (default: 64256)")
     p.add_argument("--speed", type=float, default=40.0,
                    help="Target cruise speed in kph (default: 40)")
+    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "custom"], default="ai",
+                   help="Bring-up stage: idle, cruise, built-in AI, lane, or custom lane following")
+    p.add_argument("--ai-mode", choices=["traffic", "span"], default="span",
+                   help="Built-in BeamNG AI mode when using --stage ai")
+    p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="auto",
+                   help="AI track controller when using --stage ai")
+    p.add_argument("--ai-speed-mode", choices=["limit", "set"], default="limit",
+                   help="Built-in BeamNG AI speed mode when using --stage ai")
+    p.add_argument("--ai-aggression", type=float, default=0.85,
+                   help="Built-in BeamNG AI aggression when using --stage ai")
+    p.add_argument("--road-id", type=float, default=None,
+                   help="Optional BeamNG road id for custom route following")
+    p.add_argument("--steering-log", default="logs/steering_output.csv",
+                   help="CSV path for steering-angle output in BeamNG mode")
+    p.add_argument("--max-runtime-seconds", type=float, default=None,
+                   help="Optional maximum BeamNG loop runtime before exit")
+    p.add_argument("--target-laps", type=int, default=None,
+                   help="Optional number of completed laps before exit on looped roads")
+    p.add_argument("--summary-json", default=None,
+                   help="Optional path to write a BeamNG run summary JSON")
     p.add_argument("--map", default="west_coast_usa", help="BeamNG map name")
     p.add_argument("--vehicle", default="etk800", help="BeamNG vehicle model")
     p.add_argument("--no-overlay", action="store_true",
@@ -84,6 +104,20 @@ def _run_beamng(args: argparse.Namespace) -> None:
         new_argv += ["--beamng-home", args.beamng_home]
     new_argv += ["--host", args.host, "--port", str(args.port)]
     new_argv += ["--speed", str(args.speed)]
+    new_argv += ["--stage", args.stage]
+    new_argv += ["--ai-mode", args.ai_mode]
+    new_argv += ["--ai-controller", args.ai_controller]
+    new_argv += ["--ai-speed-mode", args.ai_speed_mode]
+    new_argv += ["--ai-aggression", str(args.ai_aggression)]
+    if args.road_id is not None:
+        new_argv += ["--road-id", str(args.road_id)]
+    new_argv += ["--steering-log", args.steering_log]
+    if args.max_runtime_seconds is not None:
+        new_argv += ["--max-runtime-seconds", str(args.max_runtime_seconds)]
+    if args.target_laps is not None:
+        new_argv += ["--target-laps", str(args.target_laps)]
+    if args.summary_json:
+        new_argv += ["--summary-json", args.summary_json]
     new_argv += ["--map", args.map, "--vehicle", args.vehicle]
     if args.no_overlay:
         new_argv.append("--no-overlay")
