@@ -118,6 +118,20 @@ NO_ROAD_LIMIT: int = 10          # frames without road before emergency stop
 OBSTACLE_CLOSE_M: float = 15.0
 OBSTACLE_FRAC: float = 0.05
 SINGLE_LANE_OFFSET_LIMIT: float = 0.35
+SENSOR_SCANLINE_FRACS: Tuple[float, ...] = (0.92, 0.82, 0.72, 0.60, 0.48, 0.36)
+SENSOR_MIN_ROAD_SPAN_FRAC: float = 0.10
+SENSOR_NEAR_GAIN: float = 0.60
+SENSOR_FAR_GAIN: float = 1.10
+SENSOR_HEADING_GAIN: float = 0.45
+SENSOR_CURVATURE_GAIN: float = 0.55
+SENSOR_MIN_SPEED_KPH: float = 12.0
+SENSOR_MAX_SPEED_KPH: float = 240.0
+SENSOR_CURVE_GAIN: float = 1.35
+SENSOR_DEPTH_PREVIEW_MIN_M: float = 8.0
+SENSOR_DEPTH_PREVIEW_WARN_M: float = 35.0
+SENSOR_LAT_ACCEL_LIMIT_MPS2: float = 5.5
+SENSOR_CONFIDENCE_DECEL_GAIN: float = 0.55
+SENSOR_CURVE_SPEED_FLOOR_KPH: float = 18.0
 ROUTE_LOOKAHEAD_BASE_M: float = 12.0
 ROUTE_LOOKAHEAD_SPEED_GAIN: float = 0.65
 ROUTE_SEARCH_WINDOW: int = 80
@@ -303,6 +317,12 @@ class RouteSteeringFilter:
 class LaneResult:
     offset: float = 0.0       # -1 … +1, positive = road centre is right of image centre
     confidence: float = 0.0   # 0 = no road, 1 = both lanes found
+    near_offset: float = 0.0
+    far_offset: float = 0.0
+    heading_hint: float = 0.0
+    curvature_hint: float = 0.0
+    width_norm: float = 0.0
+    sample_count: int = 0
     overlay: Optional[np.ndarray] = None
 
 
@@ -351,6 +371,18 @@ class AITrackPreset:
     line: Optional[List[Dict[str, object]]] = None
     spawn_pos: Optional[Tuple[float, float, float]] = None
     spawn_quat: Optional[Tuple[float, float, float, float]] = None
+
+
+@dataclass
+class SensorDriveControl:
+    steering_target: float = 0.0
+    speed_target_kph: float = 0.0
+    curve_speed_cap_kph: float = 0.0
+    obstacle_speed_cap_kph: float = 0.0
+    lateral_accel_cap_kph: float = 0.0
+    depth_min_m: float = float("inf")
+    close_fraction: float = 0.0
+    lateral_accel_mps2: float = 0.0
 
 
 def _to_colour_image(value: object) -> Optional[np.ndarray]:
@@ -1158,14 +1190,7 @@ def _route_control(route: RoutePlan, pos: np.ndarray, direction: np.ndarray, spe
     )
 
 
-def detect_lanes(bgr: np.ndarray) -> LaneResult:
-    """Classical OpenCV lane/road-centre detection. Returns a LaneResult."""
-    h, w = bgr.shape[:2]
-    roi_top = int(h * ROI_TOP_FRAC)
-    roi_bottom = int(h * ROI_BOTTOM_FRAC)
-    roi = bgr[roi_top:roi_bottom, :]
-
-    # Road mask (grey asphalt)
+def _road_mask(roi: np.ndarray) -> np.ndarray:
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     lower = np.array(ROAD_HSV_LOWER, dtype=np.uint8)
     upper = np.array(ROAD_HSV_UPPER, dtype=np.uint8)
@@ -1173,108 +1198,245 @@ def detect_lanes(bgr: np.ndarray) -> LaneResult:
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    return mask
 
-    # Canny edges masked to road
-    grey = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(grey, (BLUR_KERNEL, BLUR_KERNEL), 0)
-    edges = cv2.Canny(blurred, CANNY_LOW, CANNY_HIGH)
-    edges = cv2.bitwise_and(edges, mask)
 
-    # Hough lines
-    raw_lines = cv2.HoughLinesP(
-        edges, 1, np.pi / 180,
-        threshold=HOUGH_THRESHOLD,
-        minLineLength=HOUGH_MIN_LINE,
-        maxLineGap=HOUGH_MAX_GAP,
+def _road_spans(row: np.ndarray) -> List[Tuple[int, int]]:
+    spans: List[Tuple[int, int]] = []
+    start: Optional[int] = None
+    for idx, value in enumerate(row):
+        if value and start is None:
+            start = idx
+        elif not value and start is not None:
+            spans.append((start, idx - 1))
+            start = None
+    if start is not None:
+        spans.append((start, len(row) - 1))
+    return spans
+
+
+def _best_road_span(
+    row: np.ndarray,
+    expected_center: float,
+    image_center: float,
+) -> Optional[Tuple[int, int]]:
+    spans = _road_spans(row)
+    if not spans:
+        return None
+
+    min_width = max(8, int(len(row) * SENSOR_MIN_ROAD_SPAN_FRAC))
+    best: Optional[Tuple[int, int]] = None
+    best_score = float("-inf")
+    for left, right in spans:
+        width = right - left + 1
+        if width < min_width:
+            continue
+        center = 0.5 * (left + right)
+        score = (
+            width
+            - 0.65 * abs(center - expected_center)
+            - 0.25 * abs(center - image_center)
+        )
+        if score > best_score:
+            best_score = score
+            best = (left, right)
+    return best
+
+
+def detect_lanes(bgr: np.ndarray) -> LaneResult:
+    """Sensor-oriented road-centre detection from the front camera."""
+    h, w = bgr.shape[:2]
+    roi_top = int(h * ROI_TOP_FRAC)
+    roi_bottom = int(h * ROI_BOTTOM_FRAC)
+    roi = bgr[roi_top:roi_bottom, :]
+    mask = _road_mask(roi)
+
+    roi_h, roi_w = mask.shape[:2]
+    image_center = roi_w * 0.5
+    expected_center = image_center
+    samples: List[Tuple[int, float, float]] = []
+
+    for frac in SENSOR_SCANLINE_FRACS:
+        y = int(np.clip(frac * (roi_h - 1), 0, roi_h - 1))
+        span = _best_road_span(mask[y], expected_center, image_center)
+        if span is None:
+            continue
+        left, right = span
+        center = 0.5 * (left + right)
+        width = float(right - left + 1)
+        samples.append((y, center, width))
+        expected_center = 0.7 * center + 0.3 * expected_center
+
+    overlay = bgr.copy()
+    cv2.rectangle(overlay, (0, roi_top), (w - 1, roi_bottom), (80, 80, 80), 1)
+
+    if len(samples) < 2:
+        colour = (0, 0, 255)
+        cv2.putText(
+            overlay,
+            "sensor road lost",
+            (10, 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            colour,
+            2,
+        )
+        return LaneResult(overlay=overlay)
+
+    xs = np.asarray([sample[1] for sample in samples], dtype=np.float64)
+    ys = np.asarray([sample[0] for sample in samples], dtype=np.float64)
+    widths = np.asarray([sample[2] for sample in samples], dtype=np.float64)
+    norm_xs = (xs - image_center) / max(image_center, 1.0)
+    near_offset = float(np.mean(norm_xs[: min(2, len(norm_xs))]))
+    far_offset = float(np.mean(norm_xs[-min(2, len(norm_xs)) :]))
+    offset = float(np.clip(near_offset * 0.35 + far_offset * 0.65, -1.0, 1.0))
+    heading_hint = float(np.clip(far_offset - offset, -1.0, 1.0))
+
+    curvature_hint = 0.0
+    if len(samples) >= 3:
+        second_diff = np.diff(norm_xs, n=2)
+        curvature_hint = float(np.clip(np.mean(second_diff) * 3.5, -1.0, 1.0))
+
+    width_norm = float(np.clip(np.mean(widths) / max(float(roi_w), 1.0), 0.0, 1.0))
+    sample_ratio = len(samples) / max(len(SENSOR_SCANLINE_FRACS), 1)
+    confidence = float(np.clip(sample_ratio * min(1.0, width_norm / 0.25), 0.0, 1.0))
+
+    points = []
+    for idx, (y, center, width) in enumerate(samples):
+        global_y = int(y + roi_top)
+        left = int(center - width * 0.5)
+        right = int(center + width * 0.5)
+        cv2.line(overlay, (left, global_y), (right, global_y), (255, 160, 0), 2)
+        point = (int(center), global_y)
+        points.append(point)
+        cv2.circle(overlay, point, 4, (0, 255, 0), -1)
+        if idx > 0:
+            cv2.line(overlay, points[idx - 1], point, (0, 255, 255), 2)
+
+    target_x = int(np.clip(image_center + offset * image_center, 0, roi_w - 1))
+    target_pt = (target_x, h - 30)
+    cv2.circle(overlay, target_pt, 10, (0, 255, 0), -1)
+    cv2.line(overlay, (w // 2, h - 40), (w // 2, h - 20), (255, 255, 255), 2)
+
+    colour = (0, 255, 0) if confidence > 0.6 else (0, 165, 255) if confidence > 0.2 else (0, 0, 255)
+    cv2.putText(
+        overlay,
+        f"off={offset:+.2f} near={near_offset:+.2f} far={far_offset:+.2f}",
+        (10, 25),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        colour,
+        2,
+    )
+    cv2.putText(
+        overlay,
+        f"hdg={heading_hint:+.2f} curv={curvature_hint:+.2f} width={width_norm:.2f} conf={confidence:.2f}",
+        (10, 48),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        colour,
+        2,
     )
 
-    left_lines: List[np.ndarray] = []
-    right_lines: List[np.ndarray] = []
-    mid_x = roi.shape[1] // 2
+    return LaneResult(
+        offset=offset,
+        confidence=confidence,
+        near_offset=near_offset,
+        far_offset=far_offset,
+        heading_hint=heading_hint,
+        curvature_hint=curvature_hint,
+        width_norm=width_norm,
+        sample_count=len(samples),
+        overlay=overlay,
+    )
 
-    if raw_lines is not None:
-        for line in raw_lines:
-            x1, y1, x2, y2 = line[0]
-            if x2 == x1:
-                continue
-            slope = (y2 - y1) / (x2 - x1)
-            if abs(slope) < 0.3:
-                continue
-            if slope < 0 and x1 < mid_x and x2 < mid_x:
-                left_lines.append(line[0])
-            elif slope > 0 and x1 > mid_x and x2 > mid_x:
-                right_lines.append(line[0])
 
-    def avg_line(group: List[np.ndarray]) -> Optional[np.ndarray]:
-        if not group:
-            return None
-        xs, ys = [], []
-        for x1, y1, x2, y2 in group:
-            xs += [x1, x2]
-            ys += [y1, y2]
-        if len(xs) < 2:
-            return None
-        poly = np.polyfit(ys, xs, 1)
-        rh = roi.shape[0]
-        y_bot, y_top = rh, int(rh * 0.4)
-        return np.array([int(np.polyval(poly, y_top)), y_top,
-                         int(np.polyval(poly, y_bot)), y_bot])
-
-    left_avg = avg_line(left_lines)
-    right_avg = avg_line(right_lines)
-
-    centre_x = w / 2.0
-    half = w / 2.0
-
-    if left_avg is not None and right_avg is not None:
-        lane_mid = (left_avg[2] + right_avg[2]) / 2.0
-        offset = float(np.clip((lane_mid - centre_x) / half, -1.0, 1.0))
-        confidence = 1.0
-    elif left_avg is not None:
-        lane_mid = left_avg[2] + w * 0.35
-        offset = float(np.clip((lane_mid - centre_x) / half, -SINGLE_LANE_OFFSET_LIMIT, SINGLE_LANE_OFFSET_LIMIT))
-        confidence = 0.5
-    elif right_avg is not None:
-        lane_mid = right_avg[2] - w * 0.35
-        offset = float(np.clip((lane_mid - centre_x) / half, -SINGLE_LANE_OFFSET_LIMIT, SINGLE_LANE_OFFSET_LIMIT))
-        confidence = 0.5
-    else:
-        offset, confidence = 0.0, 0.0
-
-    # Debug overlay
-    overlay = bgr.copy()
-
-    def draw_lane(line: np.ndarray, colour: Tuple[int, int, int]) -> None:
-        pt1 = (int(line[0]), int(line[1]) + roi_top)
-        pt2 = (int(line[2]), int(line[3]) + roi_top)
-        cv2.line(overlay, pt1, pt2, colour, 3)
-
-    if left_avg is not None:
-        draw_lane(left_avg, (255, 0, 0))
-    if right_avg is not None:
-        draw_lane(right_avg, (0, 0, 255))
-
-    target_x = int(w / 2 + offset * w / 2)
-    cv2.circle(overlay, (target_x, h - 30), 10, (0, 255, 0), -1)
-    cv2.line(overlay, (w // 2, h - 40), (w // 2, h - 20), (255, 255, 255), 2)
-    colour = (0, 255, 0) if confidence > 0.5 else (0, 165, 255) if confidence > 0 else (0, 0, 255)
-    cv2.putText(overlay, f"off={offset:+.2f} conf={confidence:.2f}",
-                (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2)
-
-    return LaneResult(offset=offset, confidence=confidence, overlay=overlay)
+def depth_obstacle_stats(depth_image: Optional[np.ndarray]) -> Tuple[bool, float, float]:
+    """Return obstacle flag, low-percentile distance, and close-pixel fraction."""
+    if depth_image is None or depth_image.ndim != 2 or depth_image.size == 0:
+        return False, float("inf"), 0.0
+    h, w = depth_image.shape[:2]
+    roi = depth_image[int(h * 0.20): int(h * 0.42), int(w * 0.42): int(w * 0.58)]
+    valid = roi[np.isfinite(roi) & (roi > 0)]
+    if valid.size == 0:
+        return False, float("inf"), 0.0
+    min_dist = float(np.percentile(valid, 5))
+    close_frac = float(np.sum(valid < min(OBSTACLE_CLOSE_M, 10.0))) / float(valid.size)
+    obstacle = min_dist < 8.0 and close_frac > 0.18
+    return obstacle, min_dist, close_frac
 
 
 def obstacle_ahead(depth_image: Optional[np.ndarray]) -> bool:
-    """True if a large portion of the forward depth strip is very close."""
-    if depth_image is None or depth_image.ndim != 2 or depth_image.size == 0:
-        return False
-    h, w = depth_image.shape[:2]
-    roi = depth_image[int(h * 0.25): int(h * 0.55), int(w * 0.35): int(w * 0.65)]
-    valid = roi[np.isfinite(roi) & (roi > 0)]
-    if valid.size == 0:
-        return False
-    close_frac = float(np.sum(valid < OBSTACLE_CLOSE_M)) / valid.size
-    return close_frac > OBSTACLE_FRAC
+    return depth_obstacle_stats(depth_image)[0]
+
+
+def _sensor_control(
+    lane: LaneResult,
+    depth_image: Optional[np.ndarray],
+    gforces: Dict[str, Any],
+    target_speed_kph: float,
+) -> SensorDriveControl:
+    obstacle, min_dist, close_frac = depth_obstacle_stats(depth_image)
+    lateral_accel = abs(float((gforces or {}).get("gy", 0.0) or 0.0))
+
+    steering = (
+        SENSOR_NEAR_GAIN * lane.near_offset
+        + SENSOR_FAR_GAIN * lane.far_offset
+        + SENSOR_HEADING_GAIN * lane.heading_hint
+        + SENSOR_CURVATURE_GAIN * lane.curvature_hint
+    )
+    steering = float(np.clip(steering, -1.0, 1.0))
+
+    curve_metric = (
+        0.40 * abs(lane.heading_hint)
+        + 1.15 * abs(lane.curvature_hint)
+        + 0.35 * abs(lane.offset)
+        + max(0.0, 0.28 - lane.width_norm) * 2.0
+    )
+    curve_speed_cap = target_speed_kph / (1.0 + SENSOR_CURVE_GAIN * curve_metric * curve_metric)
+    curve_speed_cap = float(np.clip(curve_speed_cap, SENSOR_CURVE_SPEED_FLOOR_KPH, SENSOR_MAX_SPEED_KPH))
+
+    confidence_scale = 0.35 + lane.confidence * (1.0 - SENSOR_CONFIDENCE_DECEL_GAIN)
+    confidence_speed_cap = max(SENSOR_MIN_SPEED_KPH, target_speed_kph * confidence_scale)
+
+    if min_dist < SENSOR_DEPTH_PREVIEW_MIN_M:
+        obstacle_speed_cap = 0.0
+    elif not np.isfinite(min_dist) or min_dist >= SENSOR_DEPTH_PREVIEW_WARN_M:
+        obstacle_speed_cap = SENSOR_MAX_SPEED_KPH
+    else:
+        preview_ratio = (min_dist - SENSOR_DEPTH_PREVIEW_MIN_M) / max(
+            SENSOR_DEPTH_PREVIEW_WARN_M - SENSOR_DEPTH_PREVIEW_MIN_M,
+            1e-3,
+        )
+        obstacle_speed_cap = SENSOR_MIN_SPEED_KPH + preview_ratio * (target_speed_kph - SENSOR_MIN_SPEED_KPH)
+    if obstacle and min_dist < (SENSOR_DEPTH_PREVIEW_WARN_M * 0.65):
+        obstacle_speed_cap = min(obstacle_speed_cap, target_speed_kph * 0.55)
+
+    if lateral_accel <= SENSOR_LAT_ACCEL_LIMIT_MPS2:
+        lateral_accel_cap = SENSOR_MAX_SPEED_KPH
+    else:
+        excess = lateral_accel - SENSOR_LAT_ACCEL_LIMIT_MPS2
+        lateral_accel_cap = max(SENSOR_MIN_SPEED_KPH, target_speed_kph / (1.0 + 0.30 * excess * excess))
+
+    speed_target = min(
+        target_speed_kph,
+        curve_speed_cap,
+        confidence_speed_cap,
+        obstacle_speed_cap,
+        lateral_accel_cap,
+    )
+    speed_target = float(np.clip(speed_target, 0.0 if obstacle_speed_cap <= 0.0 else SENSOR_MIN_SPEED_KPH, SENSOR_MAX_SPEED_KPH))
+
+    return SensorDriveControl(
+        steering_target=steering,
+        speed_target_kph=speed_target,
+        curve_speed_cap_kph=curve_speed_cap,
+        obstacle_speed_cap_kph=float(obstacle_speed_cap),
+        lateral_accel_cap_kph=float(lateral_accel_cap),
+        depth_min_m=min_dist,
+        close_fraction=close_frac,
+        lateral_accel_mps2=lateral_accel,
+    )
 
 
 # ── Driving mode ─────────────────────────────────────────────────────────────
@@ -1299,8 +1461,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Disable the live debug window")
     p.add_argument("--map", default=MAP_NAME, help="BeamNG map name")
     p.add_argument("--vehicle", default=VEHICLE_MODEL, help="Vehicle model name")
-    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "custom"], default="ai",
-                   help="Incremental bring-up stage: idle, cruise, built-in AI, camera-lane, or road-route custom driving")
+    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "sensor", "custom"], default="ai",
+                   help="Incremental bring-up stage: idle, cruise, built-in AI, camera-lane, sensor autopilot, or road-route custom driving")
     p.add_argument("--ai-mode", choices=["traffic", "span"], default="span",
                    help="Built-in AI mode for --stage ai")
     p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="line",
@@ -1319,6 +1481,10 @@ def _parse_args() -> argparse.Namespace:
                    help="Optional number of completed laps before exiting cleanly on looped roads")
     p.add_argument("--summary-json", default=None,
                    help="Optional path to write a JSON run summary")
+    p.add_argument("--teacher-dir", default=None,
+                   help="Optional directory to record camera frames and control labels for imitation learning")
+    p.add_argument("--teacher-every", type=int, default=5,
+                   help="Record one teacher frame every N ticks when --teacher-dir is set")
     return p.parse_args()
 
 
@@ -1329,8 +1495,9 @@ def main() -> None:
     target_speed = args.speed
     show_overlay = not args.no_overlay
     route_stage = args.stage == "custom"
-    camera_stage = args.stage == "lane"
-    route_spawn_stage = args.stage in ("custom", "ai")
+    sensor_stage = args.stage in ("lane", "sensor")
+    camera_stage = sensor_stage
+    route_spawn_stage = args.stage in ("custom", "ai", "lane", "sensor")
     speed_ceiling_kph = max(MAX_SPEED_KPH, target_speed + 5.0)
 
     print("=" * 60)
@@ -1343,7 +1510,7 @@ def main() -> None:
     # Late import so the script can be imported without beamngpy installed
     try:
         from beamngpy import BeamNGpy, Scenario, Vehicle
-        from beamngpy.sensors import Camera, Electrics, Damage
+        from beamngpy.sensors import Camera, Electrics, Damage, GForces
     except ImportError:
         print("\n[error] beamngpy is not installed.")
         print("        Run:  pip install beamngpy")
@@ -1357,6 +1524,8 @@ def main() -> None:
     manual_estop = False
     steering_log_file = None
     steering_log = None
+    teacher_log_file = None
+    teacher_log = None
     route_plan: Optional[RoutePlan] = None
     run_started_t: Optional[float] = None
     max_speed_seen = 0.0
@@ -1416,6 +1585,9 @@ def main() -> None:
         damage = Damage()
         _attach_vehicle_sensor(vehicle, "damage", damage)
 
+        gforces = GForces()
+        _attach_vehicle_sensor(vehicle, "gforces", gforces)
+
         if route_spawn_stage:
             roads = bng.scenario.get_road_network(include_edges=True, drivable_only=True)
             route_plan = _get_route_plan(roads, args.map, args.road_id)
@@ -1433,6 +1605,23 @@ def main() -> None:
 
             if ai_preset is not None and ai_preset.spawn_pos is not None and ai_preset.spawn_quat is not None:
                 spawn_pos, spawn_quat = ai_preset.spawn_pos, ai_preset.spawn_quat
+            elif sensor_stage and args.map in TRACK_WAYPOINT_SPAWN_PRESETS:
+                spawn_pos, spawn_quat = TRACK_WAYPOINT_SPAWN_PRESETS[args.map]
+            elif sensor_stage:
+                sensor_spawn_preset = _load_track_mission_preset(
+                    args.beamng_home or BEAMNG_HOME,
+                    args.map,
+                    target_speed,
+                    args.ai_aggression,
+                )
+                if (
+                    sensor_spawn_preset is not None
+                    and sensor_spawn_preset.spawn_pos is not None
+                    and sensor_spawn_preset.spawn_quat is not None
+                ):
+                    spawn_pos, spawn_quat = sensor_spawn_preset.spawn_pos, sensor_spawn_preset.spawn_quat
+                else:
+                    spawn_pos, spawn_quat = _route_spawn_pose(route_plan)
             else:
                 spawn_pos, spawn_quat = _route_spawn_pose(route_plan)
             lap_tracker.start_pos = np.asarray(spawn_pos, dtype=np.float64)
@@ -1452,8 +1641,9 @@ def main() -> None:
                         f"points={len(route_plan.points)} looped={route_plan.looped}"
                     )
                 else:
+                    spawn_label = "sensor spawn road" if sensor_stage else "AI spawn road"
                     print(
-                        f"[main] AI spawn road={route_plan.road_id:.0f} "
+                        f"[main] {spawn_label}={route_plan.road_id:.0f} "
                         f"points={len(route_plan.points)} looped={route_plan.looped}"
                     )
 
@@ -1495,8 +1685,51 @@ def main() -> None:
             "route_preview_curvature",
             "route_preview_distance_m",
             "route_progress_index",
+            "sensor_near_offset",
+            "sensor_far_offset",
+            "sensor_heading_hint",
+            "sensor_curvature_hint",
+            "sensor_width_norm",
+            "sensor_sample_count",
+            "sensor_speed_target_kph",
+            "sensor_curve_speed_cap_kph",
+            "sensor_obstacle_speed_cap_kph",
+            "sensor_lateral_accel_cap_kph",
+            "sensor_depth_min_m",
+            "sensor_close_fraction",
+            "sensor_lateral_accel_mps2",
             "damage",
         ])
+
+        teacher_images_dir: Optional[str] = None
+        if args.teacher_dir:
+            teacher_images_dir = os.path.join(args.teacher_dir, "images")
+            os.makedirs(teacher_images_dir, exist_ok=True)
+            teacher_log_path = os.path.join(args.teacher_dir, "labels.csv")
+            teacher_log_file = open(teacher_log_path, "w", newline="", encoding="utf-8")
+            teacher_log = csv.writer(teacher_log_file)
+            teacher_log.writerow([
+                "tick",
+                "stage",
+                "map",
+                "vehicle",
+                "image_path",
+                "speed_kph",
+                "steering_wheel_deg",
+                "steering_input",
+                "throttle_input",
+                "brake_input",
+                "lane_offset",
+                "lane_confidence",
+                "sensor_near_offset",
+                "sensor_far_offset",
+                "sensor_heading_hint",
+                "sensor_curvature_hint",
+                "sensor_width_norm",
+                "sensor_depth_min_m",
+                "sensor_lateral_accel_mps2",
+                "damage",
+            ])
 
         print("[main] Sensors attached. Starting loop (press 'q' to quit, 'e' = e-stop).\n")
 
@@ -1523,6 +1756,8 @@ def main() -> None:
             steering_wheel_deg = 0.0
             steering_input = 0.0
             route_ctl = RouteControl()
+            sensor_ctl = SensorDriveControl(speed_target_kph=target_speed)
+            gforce_data: Dict[str, Any] = {}
             vehicle_state = getattr(vehicle, "state", {}) or {}
             pos = np.asarray(vehicle_state.get("pos") or (0.0, 0.0, 0.0), dtype=np.float64)
             direction = np.asarray(vehicle_state.get("dir") or (1.0, 0.0, 0.0), dtype=np.float64)
@@ -1541,8 +1776,12 @@ def main() -> None:
                 speed_kph = float((elec or {}).get("wheelspeed", 0.0) or 0.0) * 3.6
                 steering_wheel_deg = float((elec or {}).get("steering", 0.0) or 0.0)
                 steering_input = float((elec or {}).get("steering_input", 0.0) or 0.0)
+                throttle_input = float((elec or {}).get("throttle_input", 0.0) or 0.0)
+                brake_input = float((elec or {}).get("brake_input", 0.0) or 0.0)
             except Exception as e:
                 print(f"[elec] poll error: {e}")
+                throttle_input = 0.0
+                brake_input = 0.0
 
             try:
                 dmg = dict(damage)
@@ -1550,13 +1789,18 @@ def main() -> None:
                 max_damage_seen = max(max_damage_seen, dmg_total)
             except Exception as e:
                 print(f"[dmg] poll error: {e}")
+            try:
+                gforce_data = dict(gforces)
+            except Exception as e:
+                print(f"[gforce] poll error: {e}")
             max_speed_seen = max(max_speed_seen, speed_kph)
 
             lap_progress_index = 0
 
             # ── Perception ─────────────────────────────────────────────
-            if camera_stage and colour_img is not None:
+            if sensor_stage and colour_img is not None:
                 lane = detect_lanes(colour_img)
+                sensor_ctl = _sensor_control(lane, depth_img, gforce_data, target_speed)
             else:
                 lane = LaneResult()
                 if route_stage and route_plan is not None:
@@ -1564,7 +1808,7 @@ def main() -> None:
                     lap_progress_index = route_ctl.progress_index
                     lane.offset = float(np.clip(route_ctl.lateral_error_m / 8.0, -1.0, 1.0))
                     lane.confidence = 1.0
-                elif not camera_stage:
+                elif not sensor_stage:
                     lane.confidence = 1.0
                     if route_plan is not None:
                         lap_progress_index = _nearest_route_index(route_plan, pos)
@@ -1584,10 +1828,10 @@ def main() -> None:
                     vehicle.ai.set_line(ai_preset.line)
                     last_ai_line_refresh_lap = lap_tracker.laps_completed
 
-            obs = obstacle_ahead(depth_img) if camera_stage else False
+            obs = obstacle_ahead(depth_img) if sensor_stage else False
 
             # ── Behavior ───────────────────────────────────────────────
-            if camera_stage and lane.confidence == 0.0:
+            if sensor_stage and lane.confidence == 0.0:
                 no_road_frames += 1
             else:
                 no_road_frames = 0
@@ -1610,9 +1854,9 @@ def main() -> None:
                     f"hdg={route_ctl.heading_error_deg:+.1f})"
                 )
                 route_failure = True
-            elif obs:
+            elif obs and (not sensor_stage or sensor_ctl.depth_min_m < 5.0 or sensor_ctl.close_fraction > 0.30):
                 estop_reason = "obstacle detected"
-            elif camera_stage and no_road_frames >= NO_ROAD_LIMIT:
+            elif sensor_stage and no_road_frames >= NO_ROAD_LIMIT:
                 estop_reason = f"road lost for {no_road_frames} frames"
             elif speed_kph > speed_ceiling_kph:
                 estop_reason = f"over speed limit ({speed_kph:.1f} kph)"
@@ -1657,6 +1901,9 @@ def main() -> None:
             elif route_stage:
                 steering = route_steer_filter.compute(route_ctl.steering_target)
                 throttle, brake = speed_pid.compute(route_ctl.speed_target_kph, speed_kph)
+            elif sensor_stage:
+                steering = route_steer_filter.compute(sensor_ctl.steering_target)
+                throttle, brake = speed_pid.compute(sensor_ctl.speed_target_kph, speed_kph)
             else:
                 steering = steer_pid.compute(lane.offset)
                 throttle, brake = speed_pid.compute(target_speed, speed_kph)
@@ -1694,10 +1941,58 @@ def main() -> None:
                     f"{route_ctl.preview_curvature:.6f}",
                     f"{route_ctl.preview_distance_m:.3f}",
                     route_ctl.progress_index,
+                    f"{lane.near_offset:.6f}",
+                    f"{lane.far_offset:.6f}",
+                    f"{lane.heading_hint:.6f}",
+                    f"{lane.curvature_hint:.6f}",
+                    f"{lane.width_norm:.6f}",
+                    lane.sample_count,
+                    f"{sensor_ctl.speed_target_kph:.3f}",
+                    f"{sensor_ctl.curve_speed_cap_kph:.3f}",
+                    f"{sensor_ctl.obstacle_speed_cap_kph:.3f}",
+                    f"{sensor_ctl.lateral_accel_cap_kph:.3f}",
+                    f"{sensor_ctl.depth_min_m:.3f}",
+                    f"{sensor_ctl.close_fraction:.6f}",
+                    f"{sensor_ctl.lateral_accel_mps2:.6f}",
                     f"{dmg_total:.3f}",
                 ])
                 if tick % 10 == 0:
                     steering_log_file.flush()
+
+            if (
+                teacher_log is not None
+                and teacher_images_dir is not None
+                and colour_img is not None
+                and args.teacher_every > 0
+                and tick % args.teacher_every == 0
+            ):
+                image_name = f"frame_{tick:06d}.jpg"
+                image_path = os.path.join(teacher_images_dir, image_name)
+                cv2.imwrite(image_path, colour_img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                teacher_log.writerow([
+                    tick,
+                    args.stage,
+                    args.map,
+                    args.vehicle,
+                    os.path.relpath(image_path, args.teacher_dir),
+                    f"{speed_kph:.3f}",
+                    f"{steering_wheel_deg:.3f}",
+                    f"{steering_input:.6f}",
+                    f"{throttle_input:.6f}",
+                    f"{brake_input:.6f}",
+                    f"{lane.offset:.6f}",
+                    f"{lane.confidence:.3f}",
+                    f"{lane.near_offset:.6f}",
+                    f"{lane.far_offset:.6f}",
+                    f"{lane.heading_hint:.6f}",
+                    f"{lane.curvature_hint:.6f}",
+                    f"{lane.width_norm:.6f}",
+                    f"{sensor_ctl.depth_min_m:.3f}",
+                    f"{sensor_ctl.lateral_accel_mps2:.6f}",
+                    f"{dmg_total:.3f}",
+                ])
+                if tick % max(args.teacher_every * 5, 10) == 0:
+                    teacher_log_file.flush()
 
             # ── Console telemetry ──────────────────────────────────────
             if tick % 10 == 0:
@@ -1709,7 +2004,11 @@ def main() -> None:
                     f"mode={mode.name}  stage={args.stage}  "
                     f"lap={lap_tracker.laps_completed}  "
                     f"hdg={route_ctl.heading_error_deg:+5.1f}  "
-                    f"vref={route_ctl.speed_target_kph:4.1f}  dmg={dmg_total:.1f}",
+                    f"sensor_h={lane.heading_hint:+.2f}  "
+                    f"vref={max(route_ctl.speed_target_kph, sensor_ctl.speed_target_kph):4.1f}  "
+                    f"d={sensor_ctl.depth_min_m:5.1f}m  "
+                    f"lat={sensor_ctl.lateral_accel_mps2:4.1f}  "
+                    f"dmg={dmg_total:.1f}",
                     end="", flush=True,
                 )
 
@@ -1796,6 +2095,8 @@ def main() -> None:
         cv2.destroyAllWindows()
         if steering_log_file is not None:
             steering_log_file.close()
+        if teacher_log_file is not None:
+            teacher_log_file.close()
         if bng is not None:
             try:
                 bng.scenario.stop()

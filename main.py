@@ -55,8 +55,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--port", type=int, default=64256, help="BeamNG port (default: 64256)")
     p.add_argument("--speed", type=float, default=40.0,
                    help="Target cruise speed in kph (default: 40)")
-    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "custom"], default="ai",
-                   help="Bring-up stage: idle, cruise, built-in AI, lane, or custom lane following")
+    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "sensor", "custom"], default="ai",
+                   help="Bring-up stage: idle, cruise, built-in AI, lane, sensor autopilot, or custom route following")
     p.add_argument("--ai-mode", choices=["traffic", "span"], default="span",
                    help="Built-in BeamNG AI mode when using --stage ai")
     p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="line",
@@ -75,6 +75,10 @@ def _parse_args() -> argparse.Namespace:
                    help="Optional number of completed laps before exit on looped roads")
     p.add_argument("--summary-json", default=None,
                    help="Optional path to write a BeamNG run summary JSON")
+    p.add_argument("--teacher-dir", default=None,
+                   help="Optional directory to record camera frames and control labels for imitation learning")
+    p.add_argument("--teacher-every", type=int, default=5,
+                   help="Record one teacher frame every N ticks when --teacher-dir is set")
     p.add_argument("--map", default="west_coast_usa", help="BeamNG map name")
     p.add_argument("--vehicle", default="etk800", help="BeamNG vehicle model")
     p.add_argument("--no-overlay", action="store_true",
@@ -118,6 +122,10 @@ def _run_beamng(args: argparse.Namespace) -> None:
         new_argv += ["--target-laps", str(args.target_laps)]
     if args.summary_json:
         new_argv += ["--summary-json", args.summary_json]
+    if args.teacher_dir:
+        new_argv += ["--teacher-dir", args.teacher_dir]
+    if args.teacher_every is not None:
+        new_argv += ["--teacher-every", str(args.teacher_every)]
     new_argv += ["--map", args.map, "--vehicle", args.vehicle]
     if args.no_overlay:
         new_argv.append("--no-overlay")
