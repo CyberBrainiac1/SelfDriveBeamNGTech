@@ -947,7 +947,7 @@ def _build_ai_track_preset(
         if controller == "line":
             return None
 
-    if controller in ("auto", "waypoints"):
+    if controller == "waypoints":
         waypoints = TRACK_WAYPOINT_PRESETS.get(map_name)
         if waypoints:
             spawn_pos = None
@@ -1303,7 +1303,7 @@ def _parse_args() -> argparse.Namespace:
                    help="Incremental bring-up stage: idle, cruise, built-in AI, camera-lane, or road-route custom driving")
     p.add_argument("--ai-mode", choices=["traffic", "span"], default="span",
                    help="Built-in AI mode for --stage ai")
-    p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="auto",
+    p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="line",
                    help="AI track controller for --stage ai")
     p.add_argument("--ai-speed-mode", choices=["limit", "set"], default="limit",
                    help="Built-in AI speed behavior for --stage ai")

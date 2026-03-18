@@ -59,7 +59,7 @@ def _parse_args() -> argparse.Namespace:
                    help="Bring-up stage: idle, cruise, built-in AI, lane, or custom lane following")
     p.add_argument("--ai-mode", choices=["traffic", "span"], default="span",
                    help="Built-in BeamNG AI mode when using --stage ai")
-    p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="auto",
+    p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="line",
                    help="AI track controller when using --stage ai")
     p.add_argument("--ai-speed-mode", choices=["limit", "set"], default="limit",
                    help="Built-in BeamNG AI speed mode when using --stage ai")
