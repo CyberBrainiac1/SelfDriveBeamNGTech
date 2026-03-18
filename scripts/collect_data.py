@@ -9,7 +9,7 @@ Usage
   python scripts/collect_data.py
 
 Press 'q' in the preview window (or Ctrl+C in the terminal) to stop.
-Data is saved to  data/  as  .npz  shards.
+Data is saved to  training_data/assetto_corsa/  as  .npz  shards.
 """
 
 from __future__ import annotations

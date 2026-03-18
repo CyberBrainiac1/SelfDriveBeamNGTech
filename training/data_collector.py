@@ -14,7 +14,8 @@ HOW IT WORKS
    and reads your steering angle from the AC telemetry file.
 3. Press 'q' in the preview window to stop.
 
-Data is saved as  data/session_YYYYMMDD_HHMMSS.npz  containing:
+Data is saved under  training_data/assetto_corsa/  as
+session_YYYYMMDD_HHMMSS.npz  containing:
   frames : float32 array (N, H, W, 3)  — RGB  normalised 0–1
   labels : float32 array (N,)          — steer_norm  -1 … +1
   metas  : float32 array (N, 3)        — [speed_kph, gas, brake]

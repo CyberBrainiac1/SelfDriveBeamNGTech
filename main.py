@@ -55,8 +55,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--port", type=int, default=64256, help="BeamNG port (default: 64256)")
     p.add_argument("--speed", type=float, default=40.0,
                    help="Target cruise speed in kph (default: 40)")
-    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "sensor", "custom"], default="ai",
-                   help="Bring-up stage: idle, cruise, built-in AI, lane, sensor autopilot, or custom route following")
+    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "sensor", "imitate", "custom"], default="ai",
+                   help="Bring-up stage: idle, cruise, built-in AI, lane, sensor autopilot, learned imitation, or custom route following")
     p.add_argument("--ai-mode", choices=["traffic", "span"], default="span",
                    help="Built-in BeamNG AI mode when using --stage ai")
     p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="line",
@@ -67,6 +67,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Built-in BeamNG AI aggression when using --stage ai")
     p.add_argument("--road-id", type=float, default=None,
                    help="Optional BeamNG road id for custom route following")
+    p.add_argument("--mission-preset", default=None,
+                   help="Optional BeamNG mission race JSON (absolute or relative to BeamNG home) for AI-line teacher routes")
     p.add_argument("--steering-log", default="logs/steering_output.csv",
                    help="CSV path for steering-angle output in BeamNG mode")
     p.add_argument("--max-runtime-seconds", type=float, default=None,
@@ -76,9 +78,13 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--summary-json", default=None,
                    help="Optional path to write a BeamNG run summary JSON")
     p.add_argument("--teacher-dir", default=None,
-                   help="Optional directory to record camera frames and control labels for imitation learning")
+                   help="Optional teacher dataset directory. Use a bare name or 'auto' to save under training_data/beamng_teacher")
     p.add_argument("--teacher-every", type=int, default=5,
                    help="Record one teacher frame every N ticks when --teacher-dir is set")
+    p.add_argument("--imitation-model", default="models/beamng_imitation.keras",
+                   help="Path to a trained BeamNG imitation model for --stage imitate")
+    p.add_argument("--imitation-blend", type=float, default=0.85,
+                   help="Blend between learned steering and heuristic sensor steering for --stage imitate")
     p.add_argument("--map", default="west_coast_usa", help="BeamNG map name")
     p.add_argument("--vehicle", default="etk800", help="BeamNG vehicle model")
     p.add_argument("--no-overlay", action="store_true",
@@ -115,6 +121,8 @@ def _run_beamng(args: argparse.Namespace) -> None:
     new_argv += ["--ai-aggression", str(args.ai_aggression)]
     if args.road_id is not None:
         new_argv += ["--road-id", str(args.road_id)]
+    if args.mission_preset:
+        new_argv += ["--mission-preset", args.mission_preset]
     new_argv += ["--steering-log", args.steering_log]
     if args.max_runtime_seconds is not None:
         new_argv += ["--max-runtime-seconds", str(args.max_runtime_seconds)]
@@ -126,6 +134,10 @@ def _run_beamng(args: argparse.Namespace) -> None:
         new_argv += ["--teacher-dir", args.teacher_dir]
     if args.teacher_every is not None:
         new_argv += ["--teacher-every", str(args.teacher_every)]
+    if args.imitation_model:
+        new_argv += ["--imitation-model", args.imitation_model]
+    if args.imitation_blend is not None:
+        new_argv += ["--imitation-blend", str(args.imitation_blend)]
     new_argv += ["--map", args.map, "--vehicle", args.vehicle]
     if args.no_overlay:
         new_argv.append("--no-overlay")

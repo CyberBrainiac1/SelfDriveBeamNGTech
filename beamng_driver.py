@@ -41,6 +41,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
+from training.paths import BEAMNG_TEACHER_DATA_DIR, resolve_beamng_teacher_dir
+
 
 LOCAL_BEAMNGPY_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "BeamNGpy", "src")
 if os.path.isdir(LOCAL_BEAMNGPY_SRC) and LOCAL_BEAMNGPY_SRC not in sys.path:
@@ -95,6 +97,12 @@ TRACK_MISSION_PRESETS: Dict[str, str] = {
     "automation_test_track": os.path.join(
         "gameplay", "missions", "automation_test_track", "timeTrial", "008-Race", "race.race.json"
     ),
+    "east_coast_usa": os.path.join(
+        "gameplay", "missions", "east_coast_usa", "timeTrial", "003-High", "race.race.json"
+    ),
+    "gridmap_v2": os.path.join(
+        "gameplay", "missions", "gridmap_v2", "timeTrial", "007-Fast", "race.race.json"
+    ),
 }
 TRACK_AI_LONG_LAPS: int = 100000
 TRACK_LINE_SPACING_M: float = 8.0
@@ -130,6 +138,7 @@ SENSOR_CURVE_GAIN: float = 1.35
 SENSOR_DEPTH_PREVIEW_MIN_M: float = 8.0
 SENSOR_DEPTH_PREVIEW_WARN_M: float = 35.0
 SENSOR_LAT_ACCEL_LIMIT_MPS2: float = 5.5
+IMITATION_LAT_ACCEL_LIMIT_MPS2: float = 8.2
 SENSOR_CONFIDENCE_DECEL_GAIN: float = 0.55
 SENSOR_CURVE_SPEED_FLOOR_KPH: float = 18.0
 ROUTE_LOOKAHEAD_BASE_M: float = 12.0
@@ -185,6 +194,14 @@ SPEED_BRAKE_STRONG_DELTA_KPH: float = 10.0
 SPEED_BRAKE_EXTRA_GAIN: float = 0.08
 THROTTLE_MAX: float = 0.6
 BRAKE_MAX: float = 1.0
+IMITATION_MIN_BLEND: float = 0.55
+IMITATION_STEER_SPEED_DAMP: float = 0.18
+IMITATION_THROTTLE_STEER_REDUCTION: float = 0.78
+IMITATION_BRAKE_TRAIL_LIMIT: float = 0.38
+IMITATION_THROTTLE_RATE_UP: float = 0.08
+IMITATION_THROTTLE_RATE_DOWN: float = 0.18
+IMITATION_BRAKE_RATE_UP: float = 0.20
+IMITATION_BRAKE_RATE_DOWN: float = 0.25
 
 
 # ── PID controllers ──────────────────────────────────────────────────────────
@@ -311,6 +328,101 @@ class RouteSteeringFilter:
         return self._prev_output
 
 
+class RacingPedalController:
+    """Smooth longitudinal controller biased toward stable corner entry and exit."""
+
+    def __init__(self) -> None:
+        self._prev_t = time.monotonic()
+        self._prev_throttle = 0.0
+        self._prev_brake = 0.0
+
+    def reset(self) -> None:
+        self._prev_t = time.monotonic()
+        self._prev_throttle = 0.0
+        self._prev_brake = 0.0
+
+    @staticmethod
+    def _rate_limit(prev: float, target: float, dt: float, up_rate: float, down_rate: float) -> float:
+        delta = target - prev
+        max_delta = (up_rate if delta >= 0.0 else down_rate) * max(dt / 0.05, 0.2)
+        if abs(delta) > max_delta:
+            target = prev + math.copysign(max_delta, delta)
+        return float(np.clip(target, 0.0, 1.0))
+
+    def compute(
+        self,
+        target_kph: float,
+        current_kph: float,
+        steering_norm: float,
+        lane_confidence: float,
+        lateral_accel_mps2: float,
+    ) -> LearnedDriveControl:
+        now = time.monotonic()
+        dt = max(now - self._prev_t, 1e-3)
+        self._prev_t = now
+
+        steer_abs = abs(float(steering_norm))
+        speed_error = float(target_kph - current_kph)
+
+        throttle_cap = THROTTLE_MAX * max(
+            0.18,
+            1.0 - IMITATION_THROTTLE_STEER_REDUCTION * (steer_abs ** 1.15),
+        )
+        if lane_confidence < 0.55:
+            throttle_cap *= max(0.45, 0.70 + 0.30 * lane_confidence)
+        if lateral_accel_mps2 > IMITATION_LAT_ACCEL_LIMIT_MPS2:
+            throttle_cap *= 0.55
+
+        trail_brake_cap = BRAKE_MAX if steer_abs < 0.10 else IMITATION_BRAKE_TRAIL_LIMIT
+        throttle_target = 0.0
+        brake_target = 0.0
+        phase = "coast"
+
+        if speed_error <= -SPEED_COAST_KPH:
+            overspeed = abs(speed_error)
+            brake_target = SPEED_BRAKE_KP * overspeed
+            if overspeed > SPEED_BRAKE_STRONG_DELTA_KPH:
+                brake_target += SPEED_BRAKE_EXTRA_GAIN * (overspeed - SPEED_BRAKE_STRONG_DELTA_KPH)
+            if steer_abs >= 0.10:
+                brake_target = min(brake_target, trail_brake_cap)
+                phase = "trail_brake"
+            else:
+                phase = "brake"
+        elif speed_error >= SPEED_COAST_KPH:
+            throttle_target = min(throttle_cap, SPEED_KP * speed_error)
+            if steer_abs > 0.65 and speed_error < 10.0:
+                throttle_target *= 0.55
+            phase = "power"
+
+        throttle = self._rate_limit(
+            self._prev_throttle,
+            throttle_target,
+            dt,
+            IMITATION_THROTTLE_RATE_UP,
+            IMITATION_THROTTLE_RATE_DOWN,
+        )
+        brake = self._rate_limit(
+            self._prev_brake,
+            brake_target,
+            dt,
+            IMITATION_BRAKE_RATE_UP,
+            IMITATION_BRAKE_RATE_DOWN,
+        )
+        if brake > 0.02:
+            throttle = 0.0
+
+        self._prev_throttle = throttle
+        self._prev_brake = brake
+        return LearnedDriveControl(
+            steering_target=0.0,
+            speed_target_kph=float(target_kph),
+            throttle=float(throttle),
+            brake=float(brake),
+            control_phase=phase,
+            throttle_cap=float(throttle_cap),
+        )
+
+
 # ── Lane detection ───────────────────────────────────────────────────────────
 
 @dataclass
@@ -383,6 +495,17 @@ class SensorDriveControl:
     depth_min_m: float = float("inf")
     close_fraction: float = 0.0
     lateral_accel_mps2: float = 0.0
+
+
+@dataclass
+class LearnedDriveControl:
+    steering_target: float = 0.0
+    speed_target_kph: float = 0.0
+    throttle: float = 0.0
+    brake: float = 0.0
+    blend: float = 0.0
+    control_phase: str = "coast"
+    throttle_cap: float = 0.0
 
 
 def _to_colour_image(value: object) -> Optional[np.ndarray]:
@@ -874,18 +997,29 @@ def _build_ai_line(points: List[np.ndarray], target_speed_kph: float, aggression
     return line
 
 
+def _resolve_mission_preset_path(
+    beamng_home: str,
+    map_name: str,
+    mission_preset: Optional[str],
+) -> Optional[str]:
+    rel_path = mission_preset or TRACK_MISSION_PRESETS.get(map_name)
+    if not rel_path:
+        return None
+    mission_path = rel_path if os.path.isabs(rel_path) else os.path.join(beamng_home, rel_path)
+    if not os.path.isfile(mission_path):
+        return None
+    return mission_path
+
+
 def _load_track_mission_preset(
     beamng_home: str,
     map_name: str,
     target_speed_kph: float,
     aggression: float,
+    mission_preset: Optional[str] = None,
 ) -> Optional[AITrackPreset]:
-    rel_path = TRACK_MISSION_PRESETS.get(map_name)
-    if rel_path is None:
-        return None
-
-    mission_path = os.path.join(beamng_home, rel_path)
-    if not os.path.isfile(mission_path):
+    mission_path = _resolve_mission_preset_path(beamng_home, map_name, mission_preset)
+    if mission_path is None:
         return None
 
     with open(mission_path, "r", encoding="utf-8") as fh:
@@ -946,7 +1080,7 @@ def _load_track_mission_preset(
 
     return AITrackPreset(
         controller="line",
-        name=os.path.basename(os.path.dirname(mission_path)),
+        name=f"{map_name}_{os.path.basename(os.path.dirname(mission_path))}",
         route_plan=route_plan,
         line=line,
         spawn_pos=spawn_pos,
@@ -961,14 +1095,21 @@ def _build_ai_track_preset(
     target_speed_kph: float,
     aggression: float,
     controller: str,
+    mission_preset: Optional[str] = None,
 ) -> Optional[AITrackPreset]:
     if controller == "span":
         return None
 
     if controller in ("auto", "line"):
-        mission_preset = _load_track_mission_preset(beamng_home, map_name, target_speed_kph, aggression)
-        if mission_preset is not None:
-            return mission_preset
+        mission_track = _load_track_mission_preset(
+            beamng_home,
+            map_name,
+            target_speed_kph,
+            aggression,
+            mission_preset=mission_preset,
+        )
+        if mission_track is not None:
+            return mission_track
         if route_plan is not None and route_plan.looped:
             return AITrackPreset(
                 controller="line",
@@ -1461,8 +1602,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Disable the live debug window")
     p.add_argument("--map", default=MAP_NAME, help="BeamNG map name")
     p.add_argument("--vehicle", default=VEHICLE_MODEL, help="Vehicle model name")
-    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "sensor", "custom"], default="ai",
-                   help="Incremental bring-up stage: idle, cruise, built-in AI, camera-lane, sensor autopilot, or road-route custom driving")
+    p.add_argument("--stage", choices=["idle", "cruise", "ai", "lane", "sensor", "imitate", "custom"], default="ai",
+                   help="Incremental bring-up stage: idle, cruise, built-in AI, camera-lane, sensor autopilot, learned imitation, or road-route custom driving")
     p.add_argument("--ai-mode", choices=["traffic", "span"], default="span",
                    help="Built-in AI mode for --stage ai")
     p.add_argument("--ai-controller", choices=["auto", "span", "waypoints", "line"], default="line",
@@ -1473,6 +1614,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Aggression for built-in AI when supported")
     p.add_argument("--road-id", type=float, default=None,
                    help="Optional road id for custom route following; defaults to the map preset or longest road")
+    p.add_argument("--mission-preset", default=None,
+                   help="Optional BeamNG mission race JSON (absolute or relative to BeamNG home) for AI-line teacher routes")
     p.add_argument("--steering-log", default=DEFAULT_STEERING_LOG_CSV,
                    help=f"CSV path for steering-angle output (default: {DEFAULT_STEERING_LOG_CSV})")
     p.add_argument("--max-runtime-seconds", type=float, default=None,
@@ -1482,9 +1625,13 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--summary-json", default=None,
                    help="Optional path to write a JSON run summary")
     p.add_argument("--teacher-dir", default=None,
-                   help="Optional directory to record camera frames and control labels for imitation learning")
+                   help=f"Optional teacher dataset directory. Use a bare name or 'auto' to save under {BEAMNG_TEACHER_DATA_DIR}")
     p.add_argument("--teacher-every", type=int, default=5,
                    help="Record one teacher frame every N ticks when --teacher-dir is set")
+    p.add_argument("--imitation-model", default=os.path.join("models", "beamng_imitation.keras"),
+                   help="Path to a trained BeamNG imitation model for --stage imitate")
+    p.add_argument("--imitation-blend", type=float, default=0.85,
+                   help="Blend ratio between learned steering and heuristic steering for --stage imitate")
     return p.parse_args()
 
 
@@ -1495,9 +1642,10 @@ def main() -> None:
     target_speed = args.speed
     show_overlay = not args.no_overlay
     route_stage = args.stage == "custom"
-    sensor_stage = args.stage in ("lane", "sensor")
+    imitation_stage = args.stage == "imitate"
+    sensor_stage = args.stage in ("lane", "sensor", "imitate")
     camera_stage = sensor_stage
-    route_spawn_stage = args.stage in ("custom", "ai", "lane", "sensor")
+    route_spawn_stage = args.stage in ("custom", "ai", "lane", "sensor", "imitate")
     speed_ceiling_kph = max(MAX_SPEED_KPH, target_speed + 5.0)
 
     print("=" * 60)
@@ -1516,9 +1664,21 @@ def main() -> None:
         print("        Run:  pip install beamngpy")
         sys.exit(1)
 
+    if imitation_stage:
+        from training.beamng_imitation import BeamNGDrivePredictor
+
+        imitation_predictor = BeamNGDrivePredictor(model_path=args.imitation_model)
+        if not imitation_predictor.load():
+            print(f"\n[error] imitation model not found: {args.imitation_model}")
+            print("        Train one with: python scripts/train_beamng_imitation.py --teacher-dir <dir>")
+            sys.exit(1)
+    else:
+        imitation_predictor = None
+
     steer_pid = SteeringPID()
     speed_pid = SpeedPID()
     route_steer_filter = RouteSteeringFilter()
+    racing_pedal_controller = RacingPedalController()
     mode = Mode.DRIVE
     no_road_frames = 0
     manual_estop = False
@@ -1526,6 +1686,7 @@ def main() -> None:
     steering_log = None
     teacher_log_file = None
     teacher_log = None
+    teacher_dataset_dir: Optional[str] = None
     route_plan: Optional[RoutePlan] = None
     run_started_t: Optional[float] = None
     max_speed_seen = 0.0
@@ -1599,20 +1760,22 @@ def main() -> None:
                     target_speed,
                     args.ai_aggression,
                     args.ai_controller,
+                    mission_preset=args.mission_preset,
                 )
                 if ai_preset is not None and ai_preset.route_plan is not None:
                     route_plan = ai_preset.route_plan
 
             if ai_preset is not None and ai_preset.spawn_pos is not None and ai_preset.spawn_quat is not None:
                 spawn_pos, spawn_quat = ai_preset.spawn_pos, ai_preset.spawn_quat
-            elif sensor_stage and args.map in TRACK_WAYPOINT_SPAWN_PRESETS:
+            elif sensor_stage and not imitation_stage and args.map in TRACK_WAYPOINT_SPAWN_PRESETS:
                 spawn_pos, spawn_quat = TRACK_WAYPOINT_SPAWN_PRESETS[args.map]
-            elif sensor_stage:
+            elif sensor_stage and (not imitation_stage or args.mission_preset is not None):
                 sensor_spawn_preset = _load_track_mission_preset(
                     args.beamng_home or BEAMNG_HOME,
                     args.map,
                     target_speed,
                     args.ai_aggression,
+                    mission_preset=args.mission_preset,
                 )
                 if (
                     sensor_spawn_preset is not None
@@ -1698,16 +1861,32 @@ def main() -> None:
             "sensor_depth_min_m",
             "sensor_close_fraction",
             "sensor_lateral_accel_mps2",
+            "imitation_pred_norm",
+            "imitation_speed_target_kph",
+            "imitation_blend",
+            "control_phase",
+            "throttle_cap",
             "damage",
         ])
 
         teacher_images_dir: Optional[str] = None
         if args.teacher_dir:
-            teacher_images_dir = os.path.join(args.teacher_dir, "images")
+            teacher_dir = resolve_beamng_teacher_dir(
+                args.teacher_dir,
+                args.map,
+                args.vehicle,
+                args.stage,
+                target_speed,
+            )
+            if teacher_dir is None:
+                raise RuntimeError("Teacher directory resolution failed.")
+            teacher_dataset_dir = str(teacher_dir)
+            teacher_images_dir = os.path.join(str(teacher_dir), "images")
             os.makedirs(teacher_images_dir, exist_ok=True)
-            teacher_log_path = os.path.join(args.teacher_dir, "labels.csv")
+            teacher_log_path = os.path.join(str(teacher_dir), "labels.csv")
             teacher_log_file = open(teacher_log_path, "w", newline="", encoding="utf-8")
             teacher_log = csv.writer(teacher_log_file)
+            print(f"[teacher] Recording dataset to {teacher_dir}")
             teacher_log.writerow([
                 "tick",
                 "stage",
@@ -1757,7 +1936,9 @@ def main() -> None:
             steering_input = 0.0
             route_ctl = RouteControl()
             sensor_ctl = SensorDriveControl(speed_target_kph=target_speed)
+            learned_ctl = LearnedDriveControl(speed_target_kph=target_speed, throttle_cap=THROTTLE_MAX)
             gforce_data: Dict[str, Any] = {}
+            imitation_pred = 0.0
             vehicle_state = getattr(vehicle, "state", {}) or {}
             pos = np.asarray(vehicle_state.get("pos") or (0.0, 0.0, 0.0), dtype=np.float64)
             direction = np.asarray(vehicle_state.get("dir") or (1.0, 0.0, 0.0), dtype=np.float64)
@@ -1801,6 +1982,11 @@ def main() -> None:
             if sensor_stage and colour_img is not None:
                 lane = detect_lanes(colour_img)
                 sensor_ctl = _sensor_control(lane, depth_img, gforce_data, target_speed)
+                if imitation_stage and imitation_predictor is not None:
+                    pred = imitation_predictor.predict(colour_img, speed_kph, args.vehicle)
+                    if pred is not None:
+                        imitation_pred = pred.steering
+                        learned_ctl.speed_target_kph = pred.speed_target_kph
             else:
                 lane = LaneResult()
                 if route_stage and route_plan is not None:
@@ -1873,6 +2059,7 @@ def main() -> None:
                 steer_pid.reset()
                 speed_pid.reset()
                 route_steer_filter.reset()
+                racing_pedal_controller.reset()
                 mode = Mode.DRIVE
             else:
                 mode = Mode.DRIVE
@@ -1882,6 +2069,7 @@ def main() -> None:
                 steer_pid.reset()
                 speed_pid.reset()
                 route_steer_filter.reset()
+                racing_pedal_controller.reset()
                 steering, throttle, brake = 0.0, 0.0, 1.0
             elif mode == Mode.STOPPED:
                 steering, throttle, brake = 0.0, 0.0, 0.3
@@ -1901,6 +2089,40 @@ def main() -> None:
             elif route_stage:
                 steering = route_steer_filter.compute(route_ctl.steering_target)
                 throttle, brake = speed_pid.compute(route_ctl.speed_target_kph, speed_kph)
+            elif imitation_stage:
+                blend = float(np.clip(args.imitation_blend, IMITATION_MIN_BLEND, 1.0))
+                if lane.confidence > 0.0:
+                    blend = max(IMITATION_MIN_BLEND, blend * (0.65 + 0.35 * lane.confidence))
+                learned_ctl.blend = blend
+                steer_target = blend * imitation_pred + (1.0 - blend) * sensor_ctl.steering_target
+                if lane.confidence < 0.35:
+                    steer_target = sensor_ctl.steering_target
+                steer_target *= max(0.55, 1.0 - IMITATION_STEER_SPEED_DAMP * max(speed_kph - 80.0, 0.0) / 40.0)
+                learned_ctl.steering_target = steer_target
+                steering = route_steer_filter.compute(steer_target)
+                if sensor_ctl.lateral_accel_mps2 <= IMITATION_LAT_ACCEL_LIMIT_MPS2:
+                    imitation_lat_cap = SENSOR_MAX_SPEED_KPH
+                else:
+                    excess = sensor_ctl.lateral_accel_mps2 - IMITATION_LAT_ACCEL_LIMIT_MPS2
+                    imitation_lat_cap = max(
+                        SENSOR_MIN_SPEED_KPH,
+                        target_speed / (1.0 + 0.22 * excess * excess),
+                    )
+                learned_speed_target = float(np.clip(learned_ctl.speed_target_kph, SENSOR_MIN_SPEED_KPH, target_speed))
+                safety_target = min(learned_speed_target, sensor_ctl.obstacle_speed_cap_kph, imitation_lat_cap)
+                if lane.confidence < 0.55:
+                    safety_target = min(safety_target, sensor_ctl.curve_speed_cap_kph)
+                learned_ctl.speed_target_kph = safety_target
+                learned_ctl = racing_pedal_controller.compute(
+                    safety_target,
+                    speed_kph,
+                    steering,
+                    lane.confidence,
+                    sensor_ctl.lateral_accel_mps2,
+                )
+                learned_ctl.steering_target = steer_target
+                learned_ctl.blend = blend
+                throttle, brake = learned_ctl.throttle, learned_ctl.brake
             elif sensor_stage:
                 steering = route_steer_filter.compute(sensor_ctl.steering_target)
                 throttle, brake = speed_pid.compute(sensor_ctl.speed_target_kph, speed_kph)
@@ -1954,6 +2176,11 @@ def main() -> None:
                     f"{sensor_ctl.depth_min_m:.3f}",
                     f"{sensor_ctl.close_fraction:.6f}",
                     f"{sensor_ctl.lateral_accel_mps2:.6f}",
+                    f"{imitation_pred:.6f}",
+                    f"{learned_ctl.speed_target_kph:.3f}",
+                    f"{learned_ctl.blend:.6f}",
+                    learned_ctl.control_phase,
+                    f"{learned_ctl.throttle_cap:.6f}",
                     f"{dmg_total:.3f}",
                 ])
                 if tick % 10 == 0:
@@ -2005,6 +2232,9 @@ def main() -> None:
                     f"lap={lap_tracker.laps_completed}  "
                     f"hdg={route_ctl.heading_error_deg:+5.1f}  "
                     f"sensor_h={lane.heading_hint:+.2f}  "
+                    f"ml={imitation_pred:+.2f}  "
+                    f"ml_v={learned_ctl.speed_target_kph:4.1f}  "
+                    f"phase={learned_ctl.control_phase:<11}  "
                     f"vref={max(route_ctl.speed_target_kph, sensor_ctl.speed_target_kph):4.1f}  "
                     f"d={sensor_ctl.depth_min_m:5.1f}m  "
                     f"lat={sensor_ctl.lateral_accel_mps2:4.1f}  "
@@ -2070,6 +2300,8 @@ def main() -> None:
             "stage": args.stage if 'args' in locals() else None,
             "ai_controller": ai_controller_name if 'ai_controller_name' in locals() else None,
             "ai_preset": ai_preset.name if 'ai_preset' in locals() and ai_preset is not None else None,
+            "mission_preset": args.mission_preset if 'args' in locals() else None,
+            "teacher_dir": teacher_dataset_dir,
             "target_speed_kph": target_speed if 'target_speed' in locals() else None,
             "target_laps_requested": args.target_laps if 'args' in locals() else None,
             "target_laps_reached": target_laps_reached,

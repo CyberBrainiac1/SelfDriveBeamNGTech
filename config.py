@@ -8,6 +8,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Tuple
 
+from training.paths import AC_TRAINING_DATA_DIR
+
 # ── Assetto Corsa paths ───────────────────────────────────────────
 _AC_DOCS = os.path.join(os.path.expanduser("~"), "Documents", "Assetto Corsa")
 
@@ -84,7 +86,7 @@ class TrainingConfig:
     img_height: int = 66
     img_channels: int = 3            # keep colour for training (NVIDIA style)
     # Training data
-    data_dir: str = "data"
+    data_dir: str = str(AC_TRAINING_DATA_DIR)
     # Model
     model_path: str = "models/acdriver_model.keras"
     batch_size: int = 32
