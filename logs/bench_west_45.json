@@ -1,0 +1,12 @@
+{
+  "map": "west_coast_usa",
+  "vehicle": "etk800",
+  "stage": "custom",
+  "target_speed_kph": 45.0,
+  "road_id": 59564.0,
+  "ticks": 147,
+  "max_speed_kph": 44.46235910599064,
+  "max_damage": 3372.9824829101562,
+  "damage_failure": true,
+  "success": false
+}

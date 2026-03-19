@@ -1,0 +1,22 @@
+{
+  "map": "hirochi_raceway",
+  "vehicle": "bolide",
+  "stage": "imitate",
+  "ai_controller": "none",
+  "ai_preset": null,
+  "target_speed_kph": 100.0,
+  "target_laps_requested": 1,
+  "target_laps_reached": false,
+  "road_id": 23134.0,
+  "route_looped": true,
+  "route_length_m": 630.684959498905,
+  "ticks": 40,
+  "max_speed_kph": 98.81853390972911,
+  "max_damage": 2767.23583984375,
+  "laps_completed": 0,
+  "last_lap_time_s": null,
+  "lap_times_s": [],
+  "damage_failure": true,
+  "route_failure": false,
+  "success": false
+}

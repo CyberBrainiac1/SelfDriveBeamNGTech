@@ -33,11 +33,18 @@ python beamng_driver.py --beamng-home "C:\BeamNG.tech"
 ### 3. Run
 
 ```powershell
-# Use the main entry point (defaults to BeamNG.tech)
+# Use the main entry point (defaults to BeamNG.tech with built-in AI self-driving)
 python main.py
 
 # Or run the single script directly
 python beamng_driver.py
+
+# Incremental bring-up stages
+python main.py --stage idle
+python main.py --stage cruise --speed 15
+python main.py --stage ai --speed 20
+python main.py --stage custom --speed 8
+python main.py --stage custom --speed 8 --steering-log logs/steering_output.csv
 
 # Change target speed
 python beamng_driver.py --speed 60

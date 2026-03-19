@@ -49,7 +49,8 @@ class LaneDetector:
         """Run full pipeline and return a LaneDetectionResult."""
         h, w = bgr_image.shape[:2]
         roi_top = int(h * self.pcfg.roi_top_frac)
-        roi = bgr_image[roi_top:, :]
+        roi_bottom = int(h * self.pcfg.roi_bottom_frac)
+        roi = bgr_image[roi_top:roi_bottom, :]
 
         road_mask = self._road_mask(roi)
         edges = self._edges(roi, road_mask)
@@ -171,12 +172,12 @@ class LaneDetector:
             confidence = 1.0
         elif left is not None:
             # Only left lane — assume road extends rightward
-            lane_mid = left[2] + img_width * 0.25
-            offset = (lane_mid - centre_x) / half
+            lane_mid = left[2] + img_width * 0.35
+            offset = np.clip((lane_mid - centre_x) / half, -0.35, 0.35)
             confidence = 0.5
         elif right is not None:
-            lane_mid = right[2] - img_width * 0.25
-            offset = (lane_mid - centre_x) / half
+            lane_mid = right[2] - img_width * 0.35
+            offset = np.clip((lane_mid - centre_x) / half, -0.35, 0.35)
             confidence = 0.5
         else:
             offset = 0.0

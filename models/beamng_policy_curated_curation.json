@@ -1,0 +1,88 @@
+{
+  "accepted_count": 2,
+  "rejected_count": 1,
+  "runs": [
+    {
+      "teacher_dir": "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\20260318_164122_hirochi_raceway_bolide_ai_110kph",
+      "labels_path": "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\20260318_164122_hirochi_raceway_bolide_ai_110kph\\labels.csv",
+      "summary_path": null,
+      "accepted": false,
+      "reasons": [
+        "only 0 frames (< 120)",
+        "missing run_summary.json"
+      ],
+      "frame_count": 0,
+      "summary": {}
+    },
+    {
+      "teacher_dir": "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\teacher_ai_hirochi_bolide_110",
+      "labels_path": "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\teacher_ai_hirochi_bolide_110\\labels.csv",
+      "summary_path": "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\teacher_ai_hirochi_bolide_110\\run_summary.json",
+      "accepted": true,
+      "reasons": [],
+      "frame_count": 167,
+      "summary": {
+        "map": "hirochi_raceway",
+        "vehicle": "bolide",
+        "stage": "ai",
+        "ai_controller": "line",
+        "ai_preset": "hirochi_raceway_road_loop",
+        "target_speed_kph": 110.0,
+        "target_laps_requested": 2,
+        "target_laps_reached": true,
+        "road_id": 23134.0,
+        "route_looped": true,
+        "route_length_m": 630.684959498905,
+        "ticks": 167,
+        "max_speed_kph": 96.73867850511613,
+        "max_damage": 0.0,
+        "laps_completed": 2,
+        "last_lap_time_s": 33.6347341,
+        "lap_times_s": [
+          32.8,
+          33.635
+        ],
+        "damage_failure": false,
+        "route_failure": false,
+        "success": true
+      }
+    },
+    {
+      "teacher_dir": "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\teacher_ai_hirochi_bolide_110_6laps",
+      "labels_path": "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\teacher_ai_hirochi_bolide_110_6laps\\labels.csv",
+      "summary_path": "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\teacher_ai_hirochi_bolide_110_6laps\\run_summary.json",
+      "accepted": true,
+      "reasons": [],
+      "frame_count": 503,
+      "summary": {
+        "map": "hirochi_raceway",
+        "vehicle": "bolide",
+        "stage": "ai",
+        "ai_controller": "line",
+        "ai_preset": "hirochi_raceway_road_loop",
+        "target_speed_kph": 110.0,
+        "target_laps_requested": 6,
+        "target_laps_reached": true,
+        "road_id": 23134.0,
+        "route_looped": true,
+        "route_length_m": 630.684959498905,
+        "ticks": 503,
+        "max_speed_kph": 96.78245258184091,
+        "max_damage": 0.0,
+        "laps_completed": 6,
+        "last_lap_time_s": 33.6358663,
+        "lap_times_s": [
+          33.2,
+          33.636,
+          33.634,
+          33.236,
+          33.634,
+          33.636
+        ],
+        "damage_failure": false,
+        "route_failure": false,
+        "success": true
+      }
+    }
+  ]
+}

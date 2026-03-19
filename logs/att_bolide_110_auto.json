@@ -1,0 +1,22 @@
+{
+  "map": "automation_test_track",
+  "vehicle": "bolide",
+  "stage": "ai",
+  "ai_controller": "line",
+  "ai_preset": "008-Race",
+  "target_speed_kph": 110.0,
+  "target_laps_requested": 2,
+  "target_laps_reached": false,
+  "road_id": -30.0,
+  "route_looped": true,
+  "route_length_m": 3482.1965742544935,
+  "ticks": 1937,
+  "max_speed_kph": 57.46409235989181,
+  "max_damage": 9473.388427734375,
+  "laps_completed": 0,
+  "last_lap_time_s": null,
+  "lap_times_s": [],
+  "damage_failure": true,
+  "route_failure": false,
+  "success": false
+}

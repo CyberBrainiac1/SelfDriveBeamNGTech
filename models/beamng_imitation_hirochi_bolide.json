@@ -1,0 +1,11 @@
+{
+  "teacher_dirs": [
+    "logs/teacher_ai_hirochi_bolide_110_6laps"
+  ],
+  "model_path": "models/beamng_imitation_hirochi_bolide.keras",
+  "epochs": 12,
+  "batch_size": 32,
+  "train_samples": 1006,
+  "best_val_loss": 0.0008174079121090472,
+  "best_val_mae": 0.019801298156380653
+}

@@ -1,0 +1,20 @@
+{
+  "teacher_dirs": [
+    "logs/teacher_ai_hirochi_bolide_110_6laps"
+  ],
+  "model_path": "models/beamng_policy_smoketest.keras",
+  "epochs": 4,
+  "batch_size": 32,
+  "train_samples": 1006,
+  "best_val_loss": 14.020017623901367,
+  "best_val_steer_mae": 0.13692745566368103,
+  "best_val_speed_mae": 4.09497594833374,
+  "vehicle_vocab": [
+    "__unknown__",
+    "bolide"
+  ],
+  "max_speed_kph": 220.0,
+  "steering_smooth_window": 5,
+  "speed_smooth_window": 7,
+  "speed_lookahead_frames": 12
+}

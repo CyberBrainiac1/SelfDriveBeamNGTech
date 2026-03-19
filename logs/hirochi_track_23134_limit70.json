@@ -1,0 +1,20 @@
+{
+  "map": "hirochi_raceway",
+  "vehicle": "scintilla",
+  "stage": "ai",
+  "target_speed_kph": 70.0,
+  "road_id": 23134.0,
+  "route_looped": true,
+  "route_length_m": 630.684959498905,
+  "ticks": 965,
+  "max_speed_kph": 66.58952165420162,
+  "max_damage": 0.0,
+  "laps_completed": 1,
+  "last_lap_time_s": 55.865012899999996,
+  "lap_times_s": [
+    55.865
+  ],
+  "damage_failure": false,
+  "route_failure": false,
+  "success": true
+}

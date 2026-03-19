@@ -12,7 +12,7 @@ from typing import Tuple
 class BeamNGConfig:
     host: str = "localhost"
     port: int = 64256
-    home: str = r"C:\BeamNG.tech"          # ← adjust to your install path
+    home: str = r"C:\Beamngtech\BeamNG.tech.v0.38.3.0"          # ← adjust to your install path
     user_folder: str = ""                   # leave empty to use default
 
 
@@ -34,6 +34,7 @@ class CameraConfig:
     name: str = "front_cam"
     resolution: Tuple[int, int] = (640, 480)   # width, height
     fov: int = 70
+    update_time_s: float = 0.05
     # Position relative to vehicle center (x=forward, y=left, z=up)
     pos: Tuple[float, float, float] = (0.0, 0.9, 1.5)
     direction: Tuple[float, float, float] = (0, -1, 0)
@@ -54,6 +55,7 @@ class PerceptionConfig:
     canny_high: int = 150
     # Region of interest — fraction of image height for bottom crop
     roi_top_frac: float = 0.50
+    roi_bottom_frac: float = 0.74
     # Minimum lane‑line pixel count to accept a detection
     min_lane_pixels: int = 50
     # Gaussian blur kernel size (must be odd)

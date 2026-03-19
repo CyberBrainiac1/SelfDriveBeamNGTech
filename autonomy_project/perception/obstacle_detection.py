@@ -38,10 +38,10 @@ class ObstacleDetector:
             return ObstacleResult()
 
         h, w = depth_image.shape[:2]
-        # Forward ROI — central strip, bottom half
-        roi = depth_image[h // 2:, w // 4 : 3 * w // 4]
+        # Look ahead through the upper-middle image band to avoid the hood and near ground.
+        roi = depth_image[int(h * 0.25): int(h * 0.55), int(w * 0.35): int(w * 0.65)]
 
-        valid = roi[roi > 0]  # ignore zero‑depth (sky / far)
+        valid = roi[np.isfinite(roi) & (roi > 0)]  # ignore zero/invalid depth
         if valid.size == 0:
             return ObstacleResult()
 

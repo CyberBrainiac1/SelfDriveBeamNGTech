@@ -1,0 +1,1 @@
+tick,stage,map,vehicle,image_path,speed_kph,steering_wheel_deg,steering_input,throttle_input,brake_input,lane_offset,lane_confidence,sensor_near_offset,sensor_far_offset,sensor_heading_hint,sensor_curvature_hint,sensor_width_norm,sensor_depth_min_m,sensor_lateral_accel_mps2,damage

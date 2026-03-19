@@ -1,0 +1,13 @@
+{
+  "map": "automation_test_track",
+  "vehicle": "bolide",
+  "stage": "ai",
+  "target_speed_kph": 100.0,
+  "road_id": 23214.0,
+  "ticks": 322,
+  "max_speed_kph": 95.98351819221804,
+  "max_damage": 0.0,
+  "damage_failure": false,
+  "route_failure": false,
+  "success": true
+}

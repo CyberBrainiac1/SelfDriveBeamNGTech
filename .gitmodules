@@ -1,0 +1,3 @@
+[submodule "BeamNGpy"]
+	path = BeamNGpy
+	url = https://github.com/BeamNG/BeamNGpy

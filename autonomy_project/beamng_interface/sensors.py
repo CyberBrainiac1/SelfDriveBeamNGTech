@@ -59,8 +59,9 @@ class SensorBundle:
 class SensorSuite:
     """Attaches sensors to a vehicle and provides a unified poll()."""
 
-    def __init__(self, vehicle: Vehicle) -> None:
+    def __init__(self, vehicle: Vehicle, bng: Optional[Any] = None) -> None:
         self._vehicle = vehicle
+        self._bng = bng
         self._cam: Optional[Camera] = None
         self._electrics: Optional[Electrics] = None
         self._damage: Optional[Damage] = None
@@ -73,29 +74,17 @@ class SensorSuite:
         print(f"[sensors] Attaching camera '{cc.name}' "
               f"({cc.resolution[0]}×{cc.resolution[1]}, fov={cc.fov}) …")
 
-        self._cam = Camera(
-            cc.name,
-            self._vehicle.vid,
-            requested_update_time=-1.0,
-            pos=cc.pos,
-            dir=cc.direction,
-            field_of_view_y=cc.fov,
-            resolution=cc.resolution,
-            near_far_planes=cc.near_far_planes,
-            is_render_colours=cc.colour,
-            is_render_depth=cc.depth,
-            is_render_annotations=cc.annotation,
-        )
-        self._cam.attach(self._vehicle, cc.name)
+        self._cam = self._build_camera(cc)
+        self._attach_sensor(cc.name, self._cam)
 
         self._electrics = Electrics()
-        self._electrics.attach(self._vehicle, "electrics")
+        self._attach_sensor("electrics", self._electrics)
 
         self._damage = Damage()
-        self._damage.attach(self._vehicle, "damage")
+        self._attach_sensor("damage", self._damage)
 
         self._gforces = GForces()
-        self._gforces.attach(self._vehicle, "gforces")
+        self._attach_sensor("gforces", self._gforces)
 
         print("[sensors] All sensors attached.")
 
@@ -105,42 +94,33 @@ class SensorSuite:
         bundle = SensorBundle()
 
         # Vehicle state (position, velocity, rotation)
-        self._vehicle.sensors.poll()
+        self._poll_vehicle_sensors()
 
         # Camera
         try:
             cam_data = self._cam.poll()
             if "colour" in cam_data:
-                img = np.array(cam_data["colour"])
-                # BeamNGpy returns RGBA PIL image → convert to BGR numpy
-                if img.ndim == 3 and img.shape[2] == 4:
-                    img = img[:, :, :3][:, :, ::-1]  # RGBA→RGB→BGR
-                elif img.ndim == 3 and img.shape[2] == 3:
-                    img = img[:, :, ::-1]  # RGB→BGR
-                bundle.colour_image = img
+                bundle.colour_image = self._to_colour_image(cam_data["colour"])
             if "depth" in cam_data:
-                bundle.depth_image = np.array(cam_data["depth"], dtype=np.float32)
+                bundle.depth_image = self._to_depth_image(cam_data["depth"])
         except Exception as exc:
             print(f"[sensors] Camera poll error: {exc}")
 
         # Electrics
         try:
-            elec_data = self._electrics.poll()
-            bundle.electrics = dict(elec_data) if elec_data else {}
+            bundle.electrics = dict(self._electrics) if self._electrics else {}
         except Exception as exc:
             print(f"[sensors] Electrics poll error: {exc}")
 
         # Damage
         try:
-            dmg_data = self._damage.poll()
-            bundle.damage = dict(dmg_data) if dmg_data else {}
+            bundle.damage = dict(self._damage) if self._damage else {}
         except Exception as exc:
             print(f"[sensors] Damage poll error: {exc}")
 
         # GForces
         try:
-            gf_data = self._gforces.poll()
-            bundle.gforces = dict(gf_data) if gf_data else {}
+            bundle.gforces = dict(self._gforces) if self._gforces else {}
         except Exception as exc:
             print(f"[sensors] GForces poll error: {exc}")
 
@@ -157,3 +137,86 @@ class SensorSuite:
             print(f"[sensors] State read error: {exc}")
 
         return bundle
+
+    def _build_camera(self, cc: Any) -> Camera:
+        """Create a Camera object compatible with old/new BeamNGpy signatures."""
+        kwargs = {
+            "requested_update_time": cc.update_time_s,
+            "pos": cc.pos,
+            "dir": cc.direction,
+            "field_of_view_y": cc.fov,
+            "resolution": cc.resolution,
+            "near_far_planes": cc.near_far_planes,
+            "is_render_colours": cc.colour,
+            "is_render_depth": cc.depth,
+            "is_render_annotations": cc.annotation,
+        }
+        if self._bng is not None:
+            try:
+                return Camera(cc.name, self._bng, vehicle=self._vehicle, **kwargs)
+            except TypeError:
+                pass
+        try:
+            return Camera(cc.name, self._vehicle.vid, **kwargs)
+        except TypeError:
+            if self._bng is None:
+                raise RuntimeError(
+                    "BeamNGpy Camera constructor requires a BeamNGpy instance; "
+                    "pass `bng` into SensorSuite(...)."
+                )
+            return Camera(cc.name, self._bng, vehicle=self._vehicle, **kwargs)
+
+    def _attach_sensor(self, name: str, sensor: Any) -> None:
+        """Attach sensor using whichever API is available."""
+        if not hasattr(sensor, "attach"):
+            # Newer BeamNGpy sensors like Camera self-register at construction time.
+            return
+        if hasattr(self._vehicle, "attach_sensor"):
+            self._vehicle.attach_sensor(name, sensor)
+        elif hasattr(self._vehicle, "sensors") and hasattr(self._vehicle.sensors, "attach"):
+            self._vehicle.sensors.attach(name, sensor)
+        else:
+            sensor.attach(self._vehicle, name)
+
+    def _poll_vehicle_sensors(self) -> None:
+        """Poll using compatible API across BeamNGpy versions."""
+        if hasattr(self._vehicle, "poll_sensors"):
+            self._vehicle.poll_sensors()
+            return
+        sensors = getattr(self._vehicle, "sensors", None)
+        if sensors is not None and hasattr(sensors, "poll"):
+            sensors.poll()
+
+    @staticmethod
+    def _to_colour_image(value: object) -> Optional[np.ndarray]:
+        """Convert BeamNG camera colour output into a BGR image or None."""
+        if value is None:
+            return None
+        try:
+            img = np.asarray(value)
+        except Exception:
+            return None
+        if img.size == 0 or img.ndim != 3:
+            return None
+        if img.shape[2] == 4:
+            return img[:, :, 2::-1]
+        if img.shape[2] == 3:
+            return img[:, :, ::-1]
+        return None
+
+    @staticmethod
+    def _to_depth_image(value: object) -> Optional[np.ndarray]:
+        """Convert BeamNG camera depth output into a 2D float image or None."""
+        if value is None:
+            return None
+        try:
+            depth = np.asarray(value, dtype=np.float32)
+        except Exception:
+            return None
+        if depth.size == 0:
+            return None
+        if depth.ndim == 3 and depth.shape[2] == 1:
+            depth = depth[:, :, 0]
+        if depth.ndim != 2:
+            return None
+        return depth

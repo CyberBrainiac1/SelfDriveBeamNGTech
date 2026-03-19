@@ -1,0 +1,23 @@
+{
+  "map": "east_coast_usa",
+  "vehicle": "scintilla",
+  "stage": "ai",
+  "ai_controller": "line",
+  "ai_preset": "east_coast_usa_006-Asphalt",
+  "mission_preset": "gameplay\\missions\\east_coast_usa\\timeTrial\\006-Asphalt\\race.race.json",
+  "target_speed_kph": 160.0,
+  "target_laps_requested": null,
+  "target_laps_reached": true,
+  "road_id": -14.0,
+  "route_looped": false,
+  "route_length_m": 1580.4280287366312,
+  "ticks": 23,
+  "max_speed_kph": 43.960977899852686,
+  "max_damage": 2104.218002319336,
+  "laps_completed": 0,
+  "last_lap_time_s": null,
+  "lap_times_s": [],
+  "damage_failure": true,
+  "route_failure": false,
+  "success": false
+}

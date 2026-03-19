@@ -1,0 +1,14 @@
+{
+  "preset": "west_coast_circuit",
+  "map": "west_coast_usa",
+  "vehicle": "bluebuck",
+  "part_config": "vehicles/bluebuck/drift.pc",
+  "elapsed_s": 16.5596501,
+  "laps_completed": 0,
+  "max_speed_kph": 47.61387322135966,
+  "max_damage": 0.0,
+  "max_abs_slip_deg": 12.475091726259881,
+  "avg_abs_slip_deg": 1.308472041776977,
+  "reason": "route_lost",
+  "success": false
+}

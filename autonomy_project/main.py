@@ -15,8 +15,15 @@ Press 'e' to toggle manual emergency stop.
 
 from __future__ import annotations
 
+import os
 import sys
 import time
+
+LOCAL_BEAMNGPY_SRC = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "BeamNGpy", "src")
+)
+if os.path.isdir(LOCAL_BEAMNGPY_SRC) and LOCAL_BEAMNGPY_SRC not in sys.path:
+    sys.path.insert(0, LOCAL_BEAMNGPY_SRC)
 
 from config import CFG
 from beamng_interface.connection import SimConnection
@@ -52,7 +59,7 @@ def main() -> None:
         scene = ScenarioManager(bng)
         vehicle = scene.create_and_start()
 
-        sensors = SensorSuite(vehicle)
+        sensors = SensorSuite(vehicle, bng)
         sensors.attach_all()
 
         actuator = VehicleController(vehicle)

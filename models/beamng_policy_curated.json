@@ -1,0 +1,21 @@
+{
+  "teacher_dirs": [
+    "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\teacher_ai_hirochi_bolide_110",
+    "C:\\Users\\emmad\\Downloads\\CodeP\\SelfDriveBeamNGTech\\training_data\\beamng_teacher\\teacher_ai_hirochi_bolide_110_6laps"
+  ],
+  "model_path": "models\\beamng_policy_curated.keras",
+  "epochs": 10,
+  "batch_size": 32,
+  "train_samples": 1340,
+  "best_val_loss": 10.063282012939453,
+  "best_val_steer_mae": 0.07378596067428589,
+  "best_val_speed_mae": 2.8941938877105713,
+  "vehicle_vocab": [
+    "__unknown__",
+    "bolide"
+  ],
+  "max_speed_kph": 220.0,
+  "steering_smooth_window": 5,
+  "speed_smooth_window": 7,
+  "speed_lookahead_frames": 12
+}

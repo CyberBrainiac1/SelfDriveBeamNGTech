@@ -1,0 +1,13 @@
+{
+  "map": "hirochi_raceway",
+  "vehicle": "scintilla",
+  "stage": "ai",
+  "target_speed_kph": 80.0,
+  "road_id": 23164.0,
+  "ticks": 360,
+  "max_speed_kph": 71.30112284501769,
+  "max_damage": 0.0,
+  "damage_failure": false,
+  "route_failure": false,
+  "success": true
+}

@@ -1,0 +1,23 @@
+{
+  "map": "east_coast_usa",
+  "vehicle": "bolide",
+  "stage": "ai",
+  "ai_controller": "line",
+  "ai_preset": "east_coast_usa_003-High",
+  "mission_preset": "gameplay\\missions\\east_coast_usa\\timeTrial\\003-High\\race.race.json",
+  "target_speed_kph": 160.0,
+  "target_laps_requested": 1,
+  "target_laps_reached": false,
+  "road_id": -38.0,
+  "route_looped": true,
+  "route_length_m": 5852.751523082189,
+  "ticks": 23,
+  "max_speed_kph": 93.42946773294017,
+  "max_damage": 21668.845703125,
+  "laps_completed": 0,
+  "last_lap_time_s": null,
+  "lap_times_s": [],
+  "damage_failure": true,
+  "route_failure": false,
+  "success": false
+}
