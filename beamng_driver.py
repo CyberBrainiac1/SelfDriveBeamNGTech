@@ -167,6 +167,9 @@ ROUTE_STEER_DEADBAND: float = 0.02
 ROUTE_STEER_GAIN: float = 1.25
 ROUTE_STEER_FILTER_ALPHA: float = 0.65
 ROUTE_STEER_MAX_STEP: float = 0.24
+RACE_ROUTE_MAX_LATERAL_ACCEL_MPS2: float = 6.8
+RACE_ROUTE_CURVE_SPEED_SAFETY: float = 0.97
+RACE_ROUTE_STEER_SPEED_GAIN: float = 0.55
 CUSTOM_DAMAGE_STOP: float = 200.0
 CUSTOM_ROUTE_LOST_FRAMES: int = 12
 CUSTOM_ROUTE_LOST_OFFSET: float = 0.95
@@ -628,6 +631,33 @@ def _rotate_looped_route_to_best_start(points: List[np.ndarray]) -> List[np.ndar
     return points[best_idx:] + points[:best_idx]
 
 
+def _select_open_route_start(points: List[np.ndarray]) -> List[np.ndarray]:
+    n = len(points)
+    if n < 30:
+        return points
+
+    headings: List[float] = []
+    for idx in range(n - 1):
+        delta = points[idx + 1][:2] - points[idx][:2]
+        headings.append(math.atan2(float(delta[1]), float(delta[0])))
+
+    best_idx = 0
+    best_score = float("inf")
+    window = min(18, max(6, len(headings) // 8))
+    latest_start = max(1, len(headings) - window - 1)
+    for idx in range(0, latest_start):
+        score = 0.0
+        for step in range(window - 1):
+            a = headings[idx + step]
+            b = headings[idx + step + 1]
+            score += abs(_wrap_angle(b - a))
+        score += 6.0 * (idx / max(len(headings) - 1, 1))
+        if score < best_score:
+            best_score = score
+            best_idx = idx
+    return points[best_idx:]
+
+
 def _resample_route_points(points: List[np.ndarray], spacing_m: float, looped: bool) -> List[np.ndarray]:
     if len(points) < 4 or spacing_m <= 0.0:
         return points
@@ -785,6 +815,52 @@ def _rotate_looped_route_to_spawn(
     elif best_dist == float("inf"):
         best_idx = fallback_idx
     return points[best_idx:] + points[:best_idx]
+
+
+def _align_route_direction_to_spawn(
+    points: List[np.ndarray],
+    spawn_pos: Optional[Tuple[float, float, float]],
+    spawn_quat: Optional[Tuple[float, float, float, float]],
+    looped: bool,
+) -> List[np.ndarray]:
+    if len(points) < 4 or spawn_pos is None or spawn_quat is None:
+        return points
+
+    spawn_xy = np.asarray(spawn_pos[:2], dtype=np.float64)
+    forward = _quat_forward_xy(spawn_quat)
+
+    if not looped:
+        candidates = [points, list(reversed(points))]
+        best_points = points
+        best_score = float("inf")
+        for candidate in candidates:
+            tangent = _normalize_xy(candidate[min(1, len(candidate) - 1)][:2] - candidate[0][:2])
+            dot = float(np.dot(tangent, forward))
+            dist = float(np.linalg.norm(candidate[0][:2] - spawn_xy))
+            score = dist - 8.0 * dot
+            if score < best_score:
+                best_score = score
+                best_points = candidate
+        return best_points
+
+    best_points = points
+    best_score = float("inf")
+    candidates = [points, list(reversed(points))]
+    for candidate in candidates:
+        n = len(candidate)
+        for idx in range(n):
+            point = np.asarray(candidate[idx][:2], dtype=np.float64)
+            nxt = np.asarray(candidate[(idx + 1) % n][:2], dtype=np.float64)
+            tangent = _normalize_xy(nxt - point)
+            delta = point - spawn_xy
+            dist = float(np.linalg.norm(delta))
+            dot = float(np.dot(tangent, forward))
+            along = float(np.dot(delta, forward))
+            score = dist - 8.0 * dot + (0.0 if along >= -4.0 else abs(along) * 2.0)
+            if score < best_score:
+                best_score = score
+                best_points = candidate[idx:] + candidate[:idx]
+    return best_points
 
 
 def _wrapped_index(n: int, idx: int) -> int:
@@ -1073,8 +1149,10 @@ def _load_track_mission_preset(
         spawn_quat = tuple(float(value) for value in selected_start.get("rot", (0.0, 0.0, 0.0, 1.0)))
 
     route_points = _densify_track_points(ordered_points, TRACK_LINE_SPACING_M, closed)
-    if closed and spawn_pos is not None and spawn_quat is not None:
-        route_points = _rotate_looped_route_to_spawn(route_points, spawn_pos, spawn_quat)
+    if closed:
+        route_points = _align_route_direction_to_spawn(route_points, spawn_pos, spawn_quat, closed)
+    else:
+        route_points = _select_open_route_start(route_points)
     route_plan = RoutePlan(road_id=-float(start_node), points=route_points, looped=closed)
     line = _build_ai_line(route_points, target_speed_kph, aggression, closed)
 
@@ -1223,7 +1301,14 @@ def _route_preview_curvature(distances: List[float], headings: List[float]) -> T
     return best_curvature, max_turn
 
 
-def _route_control(route: RoutePlan, pos: np.ndarray, direction: np.ndarray, speed_kph: float, speed_limit_kph: float) -> RouteControl:
+def _route_control(
+    route: RoutePlan,
+    pos: np.ndarray,
+    direction: np.ndarray,
+    speed_kph: float,
+    speed_limit_kph: float,
+    race_mode: bool = False,
+) -> RouteControl:
     n = len(route.points)
     if n < 4:
         return RouteControl(speed_target_kph=min(speed_limit_kph, ROUTE_MIN_SPEED_KPH))
@@ -1290,13 +1375,17 @@ def _route_control(route: RoutePlan, pos: np.ndarray, direction: np.ndarray, spe
     preview_distances, preview_headings = _route_preview_profile(route, best_idx, preview_distance)
     preview_curvature, preview_turn = _route_preview_curvature(preview_distances, preview_headings)
 
+    max_lat_accel = RACE_ROUTE_MAX_LATERAL_ACCEL_MPS2 if race_mode else ROUTE_MAX_LATERAL_ACCEL_MPS2
+    curve_speed_safety = RACE_ROUTE_CURVE_SPEED_SAFETY if race_mode else ROUTE_CURVE_SPEED_SAFETY
+    steer_speed_gain = RACE_ROUTE_STEER_SPEED_GAIN if race_mode else 0.90
+
     curve_speed_cap = ROUTE_MAX_SPEED_KPH
     if preview_curvature > 1e-4:
-        curve_speed_cap = math.sqrt(ROUTE_MAX_LATERAL_ACCEL_MPS2 / preview_curvature) * 3.6
-        curve_speed_cap *= ROUTE_CURVE_SPEED_SAFETY
+        curve_speed_cap = math.sqrt(max_lat_accel / preview_curvature) * 3.6
+        curve_speed_cap *= curve_speed_safety
     if preview_turn > 1e-3 and preview_distances:
         avg_curvature = preview_turn / max(preview_distances[-1], 1e-3)
-        avg_speed_cap = math.sqrt((ROUTE_MAX_LATERAL_ACCEL_MPS2 * 0.85) / max(avg_curvature, 1e-4)) * 3.6
+        avg_speed_cap = math.sqrt((max_lat_accel * 0.85) / max(avg_curvature, 1e-4)) * 3.6
         curve_speed_cap = min(curve_speed_cap, avg_speed_cap)
     curve_speed_cap = max(ROUTE_CURVE_MIN_SPEED_KPH, min(curve_speed_cap, ROUTE_MAX_SPEED_KPH))
 
@@ -1313,7 +1402,7 @@ def _route_control(route: RoutePlan, pos: np.ndarray, direction: np.ndarray, spe
 
     steer_speed_cap = ROUTE_MAX_SPEED_KPH
     if abs(steer) > 0.25:
-        steer_speed_cap = max(ROUTE_MIN_SPEED_KPH, speed_limit_kph * (1.0 - 0.9 * abs(steer)))
+        steer_speed_cap = max(ROUTE_MIN_SPEED_KPH, speed_limit_kph * (1.0 - steer_speed_gain * abs(steer)))
 
     speed_target = min(speed_limit_kph, ROUTE_MAX_SPEED_KPH, curve_speed_cap, error_speed_cap, steer_speed_cap)
     speed_target = max(ROUTE_MIN_SPEED_KPH, speed_target)
@@ -1642,6 +1731,7 @@ def main() -> None:
     target_speed = args.speed
     show_overlay = not args.no_overlay
     route_stage = args.stage == "custom"
+    route_race_mode = route_stage and args.mission_preset is not None
     imitation_stage = args.stage == "imitate"
     sensor_stage = args.stage in ("lane", "sensor", "imitate")
     camera_stage = sensor_stage
@@ -1697,6 +1787,7 @@ def main() -> None:
     summary: Dict[str, Any] = {}
     lap_tracker = LapTrackerState()
     ai_preset: Optional[AITrackPreset] = None
+    route_preset: Optional[AITrackPreset] = None
     ai_controller_name: str = "none"
     last_ai_line_refresh_lap = 0
 
@@ -1752,6 +1843,16 @@ def main() -> None:
         if route_spawn_stage:
             roads = bng.scenario.get_road_network(include_edges=True, drivable_only=True)
             route_plan = _get_route_plan(roads, args.map, args.road_id)
+            if route_stage and args.mission_preset:
+                route_preset = _load_track_mission_preset(
+                    args.beamng_home or BEAMNG_HOME,
+                    args.map,
+                    target_speed,
+                    args.ai_aggression,
+                    mission_preset=args.mission_preset,
+                )
+                if route_preset is not None and route_preset.route_plan is not None:
+                    route_plan = route_preset.route_plan
             if args.stage == "ai":
                 ai_preset = _build_ai_track_preset(
                     args.beamng_home or BEAMNG_HOME,
@@ -1765,7 +1866,17 @@ def main() -> None:
                 if ai_preset is not None and ai_preset.route_plan is not None:
                     route_plan = ai_preset.route_plan
 
-            if ai_preset is not None and ai_preset.spawn_pos is not None and ai_preset.spawn_quat is not None:
+            if route_stage and route_preset is not None:
+                spawn_pos, spawn_quat = _route_spawn_pose(route_plan)
+            elif route_preset is not None and route_preset.spawn_pos is not None and route_preset.spawn_quat is not None:
+                spawn_pos, spawn_quat = route_preset.spawn_pos, route_preset.spawn_quat
+            elif (
+                ai_preset is not None
+                and ai_preset.controller == "line"
+                and ai_preset.route_plan is not None
+            ):
+                spawn_pos, spawn_quat = _route_spawn_pose(route_plan)
+            elif ai_preset is not None and ai_preset.spawn_pos is not None and ai_preset.spawn_quat is not None:
                 spawn_pos, spawn_quat = ai_preset.spawn_pos, ai_preset.spawn_quat
             elif sensor_stage and not imitation_stage and args.map in TRACK_WAYPOINT_SPAWN_PRESETS:
                 spawn_pos, spawn_quat = TRACK_WAYPOINT_SPAWN_PRESETS[args.map]
@@ -1793,10 +1904,16 @@ def main() -> None:
             vehicle.teleport(spawn_pos, rot_quat=spawn_quat, reset=True)
             bng.control.step(BEAMNG_STEPS * 3)
             if route_stage:
-                print(
-                    f"[main] Custom route road={route_plan.road_id:.0f} "
-                    f"points={len(route_plan.points)} looped={route_plan.looped}"
-                )
+                if route_preset is not None:
+                    print(
+                        f"[main] Custom track preset={route_preset.name} "
+                        f"points={len(route_plan.points)} looped={route_plan.looped}"
+                    )
+                else:
+                    print(
+                        f"[main] Custom route road={route_plan.road_id:.0f} "
+                        f"points={len(route_plan.points)} looped={route_plan.looped}"
+                    )
             else:
                 if ai_preset is not None:
                     print(
@@ -1990,7 +2107,14 @@ def main() -> None:
             else:
                 lane = LaneResult()
                 if route_stage and route_plan is not None:
-                    route_ctl = _route_control(route_plan, pos, direction, speed_kph, target_speed)
+                    route_ctl = _route_control(
+                        route_plan,
+                        pos,
+                        direction,
+                        speed_kph,
+                        target_speed,
+                        race_mode=route_race_mode,
+                    )
                     lap_progress_index = route_ctl.progress_index
                     lane.offset = float(np.clip(route_ctl.lateral_error_m / 8.0, -1.0, 1.0))
                     lane.confidence = 1.0
@@ -2088,7 +2212,20 @@ def main() -> None:
                 throttle, brake = speed_pid.compute(target_speed, speed_kph)
             elif route_stage:
                 steering = route_steer_filter.compute(route_ctl.steering_target)
-                throttle, brake = speed_pid.compute(route_ctl.speed_target_kph, speed_kph)
+                if route_race_mode:
+                    learned_ctl = racing_pedal_controller.compute(
+                        route_ctl.speed_target_kph,
+                        speed_kph,
+                        steering,
+                        1.0,
+                        0.0,
+                    )
+                    learned_ctl.steering_target = route_ctl.steering_target
+                    learned_ctl.speed_target_kph = route_ctl.speed_target_kph
+                    learned_ctl.control_phase = f"route_{learned_ctl.control_phase}"
+                    throttle, brake = learned_ctl.throttle, learned_ctl.brake
+                else:
+                    throttle, brake = speed_pid.compute(route_ctl.speed_target_kph, speed_kph)
             elif imitation_stage:
                 blend = float(np.clip(args.imitation_blend, IMITATION_MIN_BLEND, 1.0))
                 if lane.confidence > 0.0:
@@ -2201,7 +2338,7 @@ def main() -> None:
                     args.stage,
                     args.map,
                     args.vehicle,
-                    os.path.relpath(image_path, args.teacher_dir),
+                    os.path.relpath(image_path, teacher_dataset_dir),
                     f"{speed_kph:.3f}",
                     f"{steering_wheel_deg:.3f}",
                     f"{steering_input:.6f}",
@@ -2323,6 +2460,11 @@ def main() -> None:
             if summary_dir:
                 os.makedirs(summary_dir, exist_ok=True)
             with open(args.summary_json, "w", encoding="utf-8") as fh:
+                json.dump(summary, fh, indent=2)
+        if teacher_dataset_dir:
+            os.makedirs(teacher_dataset_dir, exist_ok=True)
+            teacher_summary_path = os.path.join(teacher_dataset_dir, "run_summary.json")
+            with open(teacher_summary_path, "w", encoding="utf-8") as fh:
                 json.dump(summary, fh, indent=2)
         cv2.destroyAllWindows()
         if steering_log_file is not None:
