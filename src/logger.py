@@ -1,5 +1,5 @@
 """
-logger.py — Centralized logging setup.
+logger.py - Centralized logging setup.
 
 get_logger(name, config=None) returns a logger that writes to both
 console and a rotating file under output/logs/.

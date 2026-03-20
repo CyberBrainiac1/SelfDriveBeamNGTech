@@ -1,5 +1,5 @@
 """
-stanley_controller.py — Classic Stanley lateral controller.
+stanley_controller.py - Classic Stanley lateral controller.
 """
 
 import math
@@ -65,7 +65,7 @@ class StanleyController(ControllerBase):
         k0_mps = self.softening_kph / 3.6
 
         # Cross-track error: positive = vehicle is to right of path
-        # target_x is lateral offset of path centre from vehicle → negate for CTE
+        # target_x is lateral offset of path centre from vehicle - negate for CTE
         e_ct = -local_target.target_x
 
         # Heading error: path heading minus vehicle heading

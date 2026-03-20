@@ -1,5 +1,5 @@
 """
-local_target_generator.py — Generate a local driving target from the corridor estimate.
+local_target_generator.py - Generate a local driving target from the corridor estimate.
 
 The target is a point on (or near) the corridor centre line at a speed-adaptive
 lookahead distance, optionally biased toward a racing line.
@@ -48,7 +48,7 @@ class LocalTargetGenerator:
 
     An optional racing line bias offsets the target laterally:
         - Entry bias (outer edge on straight, apex on corner entry)
-        - Exit bias (inside → outside on corner exit)
+        - Exit bias (inside - outside on corner exit)
     """
 
     def __init__(self, config=None):
@@ -216,8 +216,8 @@ class LocalTargetGenerator:
             return 0.0
 
         half_w = mean_width / 2.0
-        # Direction: positive curvature = left turn → apex is on left → bias right (+x)
-        sign = -1.0 if curvature > 0 else 1.0   # into corner → toward apex
+        # Direction: positive curvature = left turn - apex is on left - bias right (+x)
+        sign = -1.0 if curvature > 0 else 1.0   # into corner - toward apex
 
         # Entry bias
         entry = sign * self.late_apex_entry_bias * half_w

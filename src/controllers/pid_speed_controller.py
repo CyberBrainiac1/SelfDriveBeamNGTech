@@ -1,5 +1,5 @@
 """
-pid_speed_controller.py — PID-based longitudinal speed controller.
+pid_speed_controller.py - PID-based longitudinal speed controller.
 
 Converts a target speed (kph) and current speed (kph) into throttle and
 brake commands.
@@ -106,7 +106,7 @@ class PIDSpeedController:
         """
         error_kph = target_kph - current_kph
 
-        # Coast band — do nothing near target
+        # Coast band - do nothing near target
         if abs(error_kph) < self.coast_band_kph:
             throttle = 0.0
             brake = 0.0

@@ -1,5 +1,5 @@
 """
-pure_pursuit_controller.py — Classic Pure Pursuit lateral controller.
+pure_pursuit_controller.py - Classic Pure Pursuit lateral controller.
 """
 
 import math

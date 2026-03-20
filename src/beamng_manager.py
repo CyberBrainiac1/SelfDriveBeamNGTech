@@ -1,5 +1,5 @@
 """
-beamng_manager.py — High-level BeamNG session manager.
+beamng_manager.py - High-level BeamNG session manager.
 
 Orchestrates connection, scenario setup, and the main control loop lifecycle.
 """
@@ -44,7 +44,7 @@ class BeamNGManager:
 
         Returns
         -------
-        BeamNGBridge — ready-to-use bridge
+        BeamNGBridge - ready-to-use bridge
         """
         from beamng_detector import BeamNGDetector
 

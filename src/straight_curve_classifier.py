@@ -1,5 +1,5 @@
 """
-straight_curve_classifier.py — Classify road segment type from curvature estimate.
+straight_curve_classifier.py - Classify road segment type from curvature estimate.
 
 Segment types: 'straight', 'slight', 'medium', 'tight'.
 Uses temporal persistence to confirm straight segments.

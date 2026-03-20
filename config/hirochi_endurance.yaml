@@ -42,7 +42,7 @@ route:
   exit_bias: 0.05
 
 controllers:
-  lateral: "mpcc_inspired"
+  lateral: "pure_pursuit"
   wheelbase_m: 2.72
   steering_filter_alpha: 0.28
   steering_rate_limit: 0.08

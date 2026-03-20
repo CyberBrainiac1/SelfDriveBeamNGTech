@@ -1,5 +1,5 @@
 """
-local_curvature_estimator.py — Estimate road curvature from corridor centre line.
+local_curvature_estimator.py - Estimate road curvature from corridor centre line.
 
 Uses 3-point arc fitting and polynomial fitting for robustness.
 Maintains a rolling history for trend analysis.
@@ -8,7 +8,7 @@ Maintains a rolling history for trend analysis.
 import math
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Deque, List
+from typing import Deque, List, Optional
 
 import numpy as np
 
@@ -105,7 +105,7 @@ class LocalCurvatureEstimator:
         # Method 2: polynomial fit
         kappa_poly = self._poly_curvature(pts)
 
-        # Combine — average, weighted by validity
+        # Combine - average, weighted by validity
         kappa_raw = 0.0
         count = 0
         if kappa_arc is not None:
@@ -151,7 +151,7 @@ class LocalCurvatureEstimator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _arc_curvature(pts: np.ndarray) -> float | None:
+    def _arc_curvature(pts: np.ndarray) -> Optional[float]:
         """
         Fit a circle through three representative points (start, mid, end).
         Returns signed curvature (positive = left).
@@ -171,7 +171,7 @@ class LocalCurvatureEstimator:
         # Determinant method
         D = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx_ * (ay - by))
         if abs(D) < 1e-8:
-            return 0.0  # collinear → straight
+            return 0.0  # collinear - straight
 
         ux = ((ax ** 2 + ay ** 2) * (by - cy)
               + (bx ** 2 + by ** 2) * (cy - ay)
@@ -188,17 +188,17 @@ class LocalCurvatureEstimator:
         # Centre x relative to first point
         centre_x_vehicle = uy  # uy corresponds to x in our (y,x) coordinate
         kappa = 1.0 / R
-        if centre_x_vehicle < ay:  # centre is to right → right turn → negative
+        if centre_x_vehicle < ay:  # centre is to right - right turn - negative
             kappa = -kappa
 
         return kappa
 
     @staticmethod
-    def _poly_curvature(pts: np.ndarray) -> float | None:
+    def _poly_curvature(pts: np.ndarray) -> Optional[float]:
         """
         Fit y = f(x) quadratic to the centre line (x lateral, y forward).
         Actually fit x = a*y^2 + b*y + c in vehicle frame.
-        Curvature ≈ 2*a at the vehicle position (y=0 extrapolated).
+        Curvature - 2*a at the vehicle position (y=0 extrapolated).
         """
         x_vals = pts[:, 0]  # lateral
         y_vals = pts[:, 1]  # forward
@@ -212,7 +212,7 @@ class LocalCurvatureEstimator:
             return None
 
         a = coeffs[0]  # coefficient of y^2
-        # Curvature of x(y) at the start: kappa ≈ 2*a / (1 + (b)^2)^(3/2)
+        # Curvature of x(y) at the start: kappa - 2*a / (1 + (b)^2)^(3/2)
         b = coeffs[1]
         denom = (1.0 + b ** 2) ** 1.5
         if denom < 1e-6:

@@ -1,5 +1,5 @@
 """
-confidence_estimator.py — Estimate perception confidence from multiple signals.
+confidence_estimator.py - Estimate perception confidence from multiple signals.
 """
 
 import math

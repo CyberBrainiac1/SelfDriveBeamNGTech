@@ -1,9 +1,9 @@
 """
-steering_commitment_scheduler.py — Compute a steering commitment factor.
+steering_commitment_scheduler.py - Compute a steering commitment factor.
 
 The commitment factor scales how aggressively the controller follows the
 computed steering command vs. smoothing it out.  High confidence + tight
-curve → high commitment.  Confirmed straight → reduced commitment.
+curve - high commitment.  Confirmed straight - reduced commitment.
 """
 
 from dataclasses import dataclass
@@ -14,7 +14,7 @@ from straight_curve_classifier import Classification
 
 class SteeringCommitmentScheduler:
     """
-    Compute a steering commitment factor ∈ [min_commitment, max_commitment].
+    Compute a steering commitment factor - [min_commitment, max_commitment].
 
     Algorithm:
     1. Base commitment = lerp(min, max, combined_confidence).

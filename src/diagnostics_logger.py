@@ -1,5 +1,5 @@
 """
-diagnostics_logger.py — Telemetry CSV writer + JSON summary + console printer.
+diagnostics_logger.py - Telemetry CSV writer + JSON summary + console printer.
 """
 
 import csv
@@ -185,6 +185,7 @@ class DiagnosticsLogger:
             f"thr={row['throttle']:>5} brk={row['brake']:>5} | "
             f"seg={row['segment_type']:>8} | "
             f"kappa={row['curvature']:>8} | "
+            f"tx={row['target_x']:>6} ty={row['target_y']:>6} | "
             f"conf={row['curve_conf']:>5} | "
             f"commit={row['commitment']:>5} | "
             f"pts={row['n_lidar_pts']:>5}"

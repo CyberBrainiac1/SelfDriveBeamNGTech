@@ -1,5 +1,5 @@
 """
-controller_manager.py — Select and invoke lateral + speed controllers.
+controller_manager.py - Select and invoke lateral + speed controllers.
 
 Reads the lateral controller choice from config and delegates accordingly.
 """

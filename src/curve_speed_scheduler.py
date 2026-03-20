@@ -1,5 +1,5 @@
 """
-curve_speed_scheduler.py — Compute a target speed based on curvature and confidence.
+curve_speed_scheduler.py - Compute a target speed based on curvature and confidence.
 
 Uses lateral acceleration constraint to limit speed in curves.
 """
@@ -84,7 +84,7 @@ class CurveSpeedScheduler:
 
         Returns
         -------
-        float — target speed in kph
+        float - target speed in kph
         """
         base_kph = self.target_cruise_kph
 

@@ -1,5 +1,5 @@
 """
-boundary_fitter.py — Fit left/right corridor boundaries from LiDAR point cloud.
+boundary_fitter.py - Fit left/right corridor boundaries from LiDAR point cloud.
 
 Input:  filtered vehicle-frame points (N,3).
 Output: CorridorBounds dataclass with boundary stations.
@@ -53,7 +53,7 @@ class BoundaryFitter:
         self.min_forward_m: float = 5.0
         self.max_forward_m: float = 75.0
         self.station_spacing_m: float = 4.5
-        self.station_half_width_m: float = 2.0   # slice ±2 m around station y
+        self.station_half_width_m: float = 2.0   # slice -2 m around station y
         self.boundary_percentile: float = 14.0
         self.min_side_points: int = 3
         self.min_corridor_width_m: float = 4.0
@@ -130,7 +130,7 @@ class BoundaryFitter:
             # Sanity check
             width = right_x - left_x
             if width < self.min_corridor_width_m or width > self.max_corridor_width_m:
-                # Accept but flag — could be an edge station
+                # Accept but flag - could be an edge station
                 if width > self.max_corridor_width_m:
                     # Clamp to reasonable range
                     half = self.default_corridor_width_m / 2.0

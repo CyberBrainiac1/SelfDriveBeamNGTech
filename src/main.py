@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-main.py — BeamNG.tech self-driving system main entry point.
+main.py - BeamNG.tech self-driving system main entry point.
 
 Usage:
   python src/main.py [--config CONFIG_PATH] [--beamng-home PATH] [--dry-run]
@@ -112,7 +112,7 @@ def main(argv=None):
     # ------------------------------------------------------------------
     # 3. Override lateral controller if specified
     # ------------------------------------------------------------------
-    # (Not stored back to config object — passed directly to ControllerManager)
+    # (Not stored back to config object - passed directly to ControllerManager)
 
     # ------------------------------------------------------------------
     # 4. Diagnostics
@@ -334,7 +334,7 @@ def main(argv=None):
             safety_status = safety_mgr.check(vehicle_state, local_target, control_out)
 
             if safety_status.should_stop:
-                logger.error("Safety: EMERGENCY STOP — %s", safety_status.message)
+                logger.error("Safety: EMERGENCY STOP - %s", safety_status.message)
                 bridge.apply_control(steering=0.0, throttle=0.0, brake=1.0)
                 break
 

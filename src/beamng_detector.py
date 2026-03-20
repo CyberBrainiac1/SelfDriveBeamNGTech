@@ -1,9 +1,10 @@
 """
-beamng_detector.py — Locate and validate the BeamNG.tech installation.
+beamng_detector.py - Locate and validate the BeamNG.tech installation.
 """
 
 import os
 from pathlib import Path
+from typing import Optional
 
 DEFAULT_BEAMNG_HOME = r"C:\Beamngtech\BeamNG.tech.v0.38.3.0"
 BEAMNG_EXE_NAME = "BeamNG.tech.exe"
@@ -54,7 +55,7 @@ class BeamNGDetector:
             + f"\n\nPlease install BeamNG.tech or set --beamng-home / BEAMNG_HOME env var."
         )
 
-    def _validate(self, path: Path) -> str | None:
+    def _validate(self, path: Path) -> Optional[str]:
         """
         Return the path string if valid, else None.
 

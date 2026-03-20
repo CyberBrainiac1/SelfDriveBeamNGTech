@@ -1,5 +1,5 @@
 """
-lidar_preprocessor.py — Filter and downsample LiDAR point clouds.
+lidar_preprocessor.py - Filter and downsample LiDAR point clouds.
 
 Input:  raw point cloud in VEHICLE frame (X=right, Y=forward, Z=up).
 Output: filtered forward-facing points, still in vehicle frame.

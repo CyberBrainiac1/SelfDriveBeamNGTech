@@ -1,10 +1,24 @@
 """
-vehicle_state.py — VehicleState dataclass constructed from BeamNGpy sensor data.
+vehicle_state.py - VehicleState dataclass constructed from BeamNGpy 1.35 sensor data.
+
+State sensor fields (BeamNGpy 1.35):
+  - 'pos'      : (x, y, z) world position
+  - 'dir'      : (x, y, z) forward direction unit vector in world frame
+  - 'up'       : (x, y, z) up direction unit vector in world frame
+  - 'vel'      : (vx, vy, vz) velocity in m/s
+  - 'rotation' : (x, y, z, w) quaternion (NOT a matrix - we use dir/up instead)
+
+Electrics sensor fields:
+  - 'wheelspeed'     : m/s (wheel speed)
+  - 'steering_input' : [-1, 1]
+  - 'throttle_input' : [0, 1]
+  - 'brake_input'    : [0, 1]
+  - 'damage'         : cumulative damage
 """
 
 import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
@@ -20,9 +34,9 @@ class VehicleState:
     vel: np.ndarray          # shape (3,) velocity vector m/s
     speed_mps: float         # scalar speed
     speed_kph: float
-    heading_deg: float       # yaw degrees, 0=north (+Y), increases clockwise
+    heading_deg: float       # yaw degrees, 0 = +Y (north), positive = clockwise
     heading_rad: float
-    rotation_matrix: np.ndarray  # shape (3,3)
+    rotation_matrix: np.ndarray  # shape (3,3) body-to-world; columns = [right, forward, up]
     steering: float          # [-1, 1]
     throttle: float          # [0, 1]
     brake: float             # [0, 1]
@@ -42,22 +56,7 @@ class VehicleState:
         timestamp: float = None,
     ) -> "VehicleState":
         """
-        Construct VehicleState from BeamNGpy State and Electrics sensor dicts.
-
-        state_data keys (BeamNGpy State sensor):
-            'pos'      : [x, y, z]
-            'vel'      : [vx, vy, vz]
-            'rotation' : 3x3 rotation matrix (flat list of 9 floats, row-major)
-                         OR nested [[r0c0,r0c1,r0c2],[r1c0,...],...]
-            'dir'      : forward direction vector (optional)
-            'up'       : up direction vector (optional)
-
-        elec_data keys (BeamNGpy Electrics sensor):
-            'speed'          : m/s (may be labelled 'wheelspeed' on older builds)
-            'steering_input' : [-1, 1]
-            'throttle_input' : [0, 1]
-            'brake_input'    : [0, 1]
-            'damage'         : cumulative damage value
+        Construct VehicleState from BeamNGpy 1.35 State and Electrics sensor dicts.
         """
         if timestamp is None:
             timestamp = time.monotonic()
@@ -71,19 +70,24 @@ class VehicleState:
         vel = np.array(vel_raw, dtype=np.float64)
         speed_mps = float(np.linalg.norm(vel))
 
-        # Electrics speed takes priority (filtered wheel speed)
-        elec_speed = elec_data.get("speed", None)
+        # Electrics wheelspeed takes priority (smoothed wheel speed)
+        elec_speed = elec_data.get("wheelspeed", None)
         if elec_speed is not None:
             speed_mps = abs(float(elec_speed))
 
         speed_kph = speed_mps * 3.6
 
-        # --- Rotation matrix ---
-        rot_raw = state_data.get("rotation", None)
-        rotation_matrix = cls._parse_rotation(rot_raw)
+        # --- Rotation matrix from dir + up vectors ---
+        dir_raw = state_data.get("dir", [0.0, -1.0, 0.0])   # forward in world frame
+        up_raw = state_data.get("up", [0.0, 0.0, 1.0])      # up in world frame
 
-        # --- Heading ---
-        heading_rad, heading_deg = cls._heading_from_rotation(rotation_matrix)
+        rotation_matrix = cls._rotation_from_dir_up(dir_raw, up_raw)
+
+        # --- Heading from dir vector ---
+        # In BeamNG world: X=East, Y=North, Z=Up
+        # dir = forward direction of vehicle in world frame
+        # heading = angle from +Y (north), positive = clockwise (east)
+        heading_rad, heading_deg = cls._heading_from_dir(dir_raw)
 
         # --- Electrics ---
         steering = float(elec_data.get("steering_input", 0.0))
@@ -131,46 +135,65 @@ class VehicleState:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _parse_rotation(rot_raw) -> np.ndarray:
+    def _rotation_from_dir_up(dir_raw, up_raw) -> np.ndarray:
         """
-        Parse rotation data from BeamNGpy into a 3x3 numpy array.
-        Handles: None, flat list of 9, nested list of 3x3, or 4x4.
+        Build a 3x3 body-to-world rotation matrix from the vehicle's
+        forward direction vector and up direction vector.
+
+        The vehicle body frame is defined as:
+          - Body X = right  (= cross(forward, up))
+          - Body Y = forward (= dir)
+          - Body Z = up     (= up, orthogonalised)
+
+        So R = [right | forward | up_corrected]  (columns in world frame).
+
+        world_to_vehicle = R.T
         """
-        if rot_raw is None:
+        forward = np.array(dir_raw, dtype=np.float64)
+        up = np.array(up_raw, dtype=np.float64)
+
+        fwd_norm = np.linalg.norm(forward)
+        if fwd_norm < 1e-6:
             return np.eye(3)
+        forward = forward / fwd_norm
 
-        arr = np.array(rot_raw, dtype=np.float64)
+        up_norm = np.linalg.norm(up)
+        if up_norm < 1e-6:
+            up = np.array([0.0, 0.0, 1.0])
+        else:
+            up = up / up_norm
 
-        if arr.shape == (3, 3):
-            return arr
-        if arr.shape == (9,):
-            return arr.reshape(3, 3)
-        if arr.shape == (4, 4):
-            return arr[:3, :3]
-        if arr.shape == (16,):
-            return arr.reshape(4, 4)[:3, :3]
+        right = np.cross(forward, up)
+        right_norm = np.linalg.norm(right)
+        if right_norm < 1e-6:
+            # forward and up are parallel - degenerate, use fallback
+            return np.eye(3)
+        right = right / right_norm
 
-        # Fallback: identity
-        return np.eye(3)
+        # Re-orthogonalise up
+        up_corrected = np.cross(right, forward)
+        up_corrected = up_corrected / np.linalg.norm(up_corrected)
+
+        # Columns: right, forward, up
+        R = np.column_stack([right, forward, up_corrected])
+        return R
 
     @staticmethod
-    def _heading_from_rotation(R: np.ndarray) -> tuple:
+    def _heading_from_dir(dir_raw) -> tuple:
         """
-        Extract yaw (heading) from a rotation matrix.
+        Compute heading (yaw) from the vehicle's forward direction vector.
 
-        In BeamNG the vehicle's forward direction is the -Y axis of the
-        rotation matrix (column 1, negated).  We compute heading as:
-            heading = atan2(forward_x, forward_y)
-        where (forward_x, forward_y) is the world-frame forward vector.
+        In BeamNG world frame: X=East, Y=North, Z=Up.
+        heading = atan2(forward_x, forward_y)
+          = 0 when pointing north (+Y)
+          > 0 when pointing east (+X, clockwise from north)
 
         Returns (heading_rad, heading_deg).
-        heading = 0   → pointing toward +Y (north in BeamNG)
-        heading > 0   → clockwise from +Y
         """
-        # Column 1 of R is the vehicle's +Y axis in world frame.
-        # The vehicle forward is -Y body axis → +Y world column negated.
-        forward_world = -R[:, 1]  # forward direction in world frame
-
-        heading_rad = math.atan2(forward_world[0], forward_world[1])
+        fwd = np.array(dir_raw, dtype=np.float64)
+        n = np.linalg.norm(fwd[:2])
+        if n < 1e-6:
+            return 0.0, 0.0
+        heading_rad = math.atan2(float(fwd[0]), float(fwd[1]))
         heading_deg = math.degrees(heading_rad)
         return heading_rad, heading_deg

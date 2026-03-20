@@ -1,5 +1,5 @@
 """
-corridor_detector.py — Post-process BoundaryFitter output into a clean CorridorEstimate.
+corridor_detector.py - Post-process BoundaryFitter output into a clean CorridorEstimate.
 
 Applies temporal smoothing, validates corridor width, computes tangent directions.
 """
@@ -18,7 +18,7 @@ from boundary_fitter import CorridorBounds
 class CorridorEstimate:
     """
     Clean corridor description in vehicle frame (X=right, Y=forward).
-    center_line[i] = (x, y) — lateral, then forward.
+    center_line[i] = (x, y) - lateral, then forward.
     tangents[i]    = heading angle in radians (positive = turning left)
     """
     center_line: List[tuple]   # list of (x, y) pairs
@@ -165,7 +165,7 @@ class CorridorDetector:
         Compute path tangent angles from finite differences of the center line.
 
         The path runs along Y with lateral offset cx.
-        Tangent = atan2(delta_cx, delta_y) — positive = left turn.
+        Tangent = atan2(delta_cx, delta_y) - positive = left turn.
         """
         tangents = []
         n = len(cx)

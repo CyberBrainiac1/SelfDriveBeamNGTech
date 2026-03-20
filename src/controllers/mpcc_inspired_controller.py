@@ -1,5 +1,5 @@
 """
-mpcc_inspired_controller.py — MPCC-inspired lateral controller.
+mpcc_inspired_controller.py - MPCC-inspired lateral controller.
 
 A practical implementation inspired by Model Predictive Contouring Control.
 Rather than solving a full optimal control problem at each step, we:
@@ -144,22 +144,17 @@ class MPCCInspiredController(ControllerBase):
         # Ackermann-style feedforward: steer = kappa * L / (1 + v^2 * Kv)
         steer_ff = kappa * self.wheelbase_m / (1.0 + speed_mps ** 2 * self.Kv)
 
-        # Primary steering command
+        # Primary steering command.
+        # NOTE: lag error is NOT used in lateral steering - it belongs in speed
+        # planning.  Including it causes a constant bias (path starts at y~7m
+        # ahead, so e_lag ~= 7 always) that would saturate the steering command.
         softening_mps = self.softening_kph / 3.6
         speed_factor = 1.0 / max(speed_mps / softening_mps, 1.0)
-
-        steer_lat = (
-            self.contour_gain * e_contour * speed_factor
-            + self.lag_gain * e_lag
-            + self.heading_gain * e_heading
-            + self.feedforward_gain * steer_ff
-        )
 
         # Apply commitment factor to the reactive lateral correction
         # (feedforward is always fully applied)
         reactive_steer = (
             self.contour_gain * e_contour * speed_factor
-            + self.lag_gain * e_lag
             + self.heading_gain * e_heading
         )
         full_steer = reactive_steer * commitment + self.feedforward_gain * steer_ff
@@ -230,7 +225,7 @@ class MPCCInspiredController(ControllerBase):
         """
         Find the nearest point on the path to the vehicle origin (0, 0).
 
-        Returns (proj_x, proj_y, idx) — the projected point and segment index.
+        Returns (proj_x, proj_y, idx) - the projected point and segment index.
         """
         if len(path) == 0:
             return 0.0, 0.0, 0
@@ -274,13 +269,13 @@ class MPCCInspiredController(ControllerBase):
         """
         Compute (e_contour, e_lag, e_heading) errors.
 
-        e_contour : signed cross-track error (negative = vehicle left of path)
-        e_lag     : along-path lag error (positive = vehicle behind path)
-        e_heading : heading error relative to path tangent [rad]
+        e_contour : signed cross-track error (positive = path center is RIGHT of vehicle)
+        e_lag     : along-path forward distance to nearest path point (always >= 0)
+        e_heading : path tangent angle at projection point [rad], positive = path curves right
         """
         if len(path) == 0:
             return (
-                -float(local_target.target_x),
+                float(local_target.target_x),
                 0.0,
                 float(local_target.heading_at_target),
             )
@@ -289,27 +284,29 @@ class MPCCInspiredController(ControllerBase):
         idx = min(proj_idx, len(path) - 1)
         _, _, path_heading = path[idx]
 
-        # Contour error: perpendicular distance from vehicle (0,0) to path
-        # Positive = vehicle to the right of path (path needs to steer left)
-        # Vehicle is at (0,0); projected point is (proj_x, proj_y)
-        # Contour error = signed perpendicular distance
-        # Normal to tangent: (-sin(heading), cos(heading))
-        nx = -math.sin(path_heading)
-        ny = math.cos(path_heading)
-        # Vector from proj to vehicle (0,0)
+        # Vector from projected path point to vehicle (0,0)
         vx = 0.0 - proj_x
         vy = 0.0 - proj_y
-        # Positive = vehicle is left of path (path tangent in +y, left = -x)
+
+        # Cross-track error (perpendicular to path tangent).
+        # Path tangent direction: (sin(h), cos(h)).
+        # Right-pointing normal: (cos(h), -sin(h)).
+        # Positive e_contour = vehicle is to the RIGHT of the path = steer right to correct.
+        # e_contour = -(vx*nx + vy*ny) with nx=cos(h), ny=-sin(h):
+        nx = math.cos(path_heading)
+        ny = -math.sin(path_heading)
         e_contour = -(vx * nx + vy * ny)
 
-        # Lag error: forward distance to target
-        # Positive = target is ahead (normal operation)
-        tx = math.cos(path_heading)
-        ty = math.sin(path_heading)
+        # Forward lag error (along path tangent direction).
+        # Forward tangent: (sin(h), cos(h)).
+        # Positive = path point is ahead of vehicle.
+        tx = math.sin(path_heading)
+        ty = math.cos(path_heading)
         e_lag = -(vx * tx + vy * ty)
 
-        # Heading error: path tangent vs vehicle heading (vehicle heading = 0 in vehicle frame)
-        e_heading = path_heading  # path heading relative to vehicle (vehicle heading = 0)
+        # Heading error: path tangent angle relative to vehicle (vehicle heading = 0).
+        # Positive = path curves right = steer right.
+        e_heading = path_heading
 
         return float(e_contour), float(e_lag), float(e_heading)
 

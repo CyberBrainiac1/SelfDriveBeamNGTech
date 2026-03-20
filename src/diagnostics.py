@@ -1,5 +1,5 @@
 """
-diagnostics.py — Startup self-diagnostics.
+diagnostics.py - Startup self-diagnostics.
 
 Checks the environment (Python version, BeamNGpy, numpy, scipy, BeamNG path)
 and prints a diagnostic report.
@@ -38,7 +38,7 @@ class Diagnostics:
 
         Returns
         -------
-        bool — True if all critical checks passed
+        bool - True if all critical checks passed
         """
         self._results.clear()
 
@@ -82,7 +82,7 @@ class Diagnostics:
                 msg += f" (need >= {self.MIN_BEAMNGPY[0]}.{self.MIN_BEAMNGPY[1]})"
         except ImportError:
             ok = False
-            msg = "beamngpy NOT INSTALLED  →  pip install beamngpy"
+            msg = "beamngpy NOT INSTALLED  ->  pip install beamngpy"
         self._results.append(("BeamNGpy", ok, msg))
 
     def _check_numpy(self) -> None:
@@ -92,7 +92,7 @@ class Diagnostics:
             msg = f"numpy {np.__version__}"
         except ImportError:
             ok = False
-            msg = "numpy NOT INSTALLED  →  pip install numpy"
+            msg = "numpy NOT INSTALLED  ->  pip install numpy"
         self._results.append(("numpy", ok, msg))
 
     def _check_scipy(self) -> None:
@@ -102,7 +102,7 @@ class Diagnostics:
             msg = f"scipy {scipy.__version__}"
         except ImportError:
             ok = False
-            msg = "scipy NOT INSTALLED  →  pip install scipy  (optional but recommended)"
+            msg = "scipy NOT INSTALLED  ->  pip install scipy  (optional but recommended)"
         self._results.append(("scipy", ok, msg))  # Not critical
 
     def _check_yaml(self) -> None:
@@ -112,20 +112,20 @@ class Diagnostics:
             msg = f"PyYAML {yaml.__version__}"
         except ImportError:
             ok = False
-            msg = "PyYAML NOT INSTALLED  →  pip install pyyaml"
+            msg = "PyYAML NOT INSTALLED  ->  pip install pyyaml"
         self._results.append(("PyYAML", ok, msg))
 
     def _check_beamng_path(self, bng_home: str) -> None:
         path = Path(bng_home)
         if not path.is_dir():
             ok = False
-            msg = f"{bng_home}  ← directory not found"
+            msg = f"{bng_home}  <- directory not found"
         elif not (path / "BeamNG.tech.exe").is_file():
             ok = False
-            msg = f"{bng_home}  ← BeamNG.tech.exe not found in directory"
+            msg = f"{bng_home}  <- BeamNG.tech.exe not found in directory"
         else:
             ok = True
-            msg = f"{bng_home}  ✓"
+            msg = f"{bng_home}  OK"
         self._results.append(("BeamNG path", ok, msg))
 
     def _check_output_dirs(self) -> None:
@@ -152,7 +152,7 @@ class Diagnostics:
         width = 60
         print()
         print("=" * width)
-        print("  BeamNG Self-Drive — Startup Diagnostics")
+        print("  BeamNG Self-Drive - Startup Diagnostics")
         print("=" * width)
         print(f"  Platform : {platform.system()} {platform.release()}")
         print(f"  Python   : {sys.executable}")

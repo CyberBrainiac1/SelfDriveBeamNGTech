@@ -1,5 +1,5 @@
 """
-local_path_buffer.py — Rolling buffer of recent corridor centre line estimates.
+local_path_buffer.py - Rolling buffer of recent corridor centre line estimates.
 
 Provides temporal smoothing by blending the most recent estimate with a
 weighted history.
@@ -53,7 +53,7 @@ class LocalPathBuffer:
 
         Returns
         -------
-        CorridorEstimate — smoothed, validity set based on buffer state.
+        CorridorEstimate - smoothed, validity set based on buffer state.
         """
         if not corridor.valid or len(corridor.center_line) == 0:
             # Return last buffered if available
@@ -72,7 +72,7 @@ class LocalPathBuffer:
         raw_tan = corridor.tangents
 
         if len(self._buffer) == 0:
-            # Cold start — just record
+            # Cold start - just record
             self._buffer.append(list(raw_pts))
             self._buffer_tangents.append(list(raw_tan))
             return corridor

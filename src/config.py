@@ -1,5 +1,5 @@
 """
-config.py — Configuration loader with dot-access support.
+config.py - Configuration loader with dot-access support.
 
 Loads YAML config files and exposes settings as nested attributes.
 Supports a base config and named override merging.

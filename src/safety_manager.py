@@ -1,5 +1,5 @@
 """
-safety_manager.py — Monitor vehicle safety conditions and override control if needed.
+safety_manager.py - Monitor vehicle safety conditions and override control if needed.
 """
 
 import time
@@ -150,7 +150,7 @@ class SafetyManager:
             if heading_err_deg > self.emergency_heading_error_deg:
                 return SafetyStatus(
                     state=SafetyState.RECOVERY,
-                    message=f"Heading error {heading_err_deg:.1f}° exceeds limit",
+                    message=f"Heading error {heading_err_deg:.1f}- exceeds limit",
                     override_throttle=0.0,
                     override_brake=0.3,
                 )

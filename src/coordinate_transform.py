@@ -1,5 +1,5 @@
 """
-coordinate_transform.py — Coordinate frame transformations.
+coordinate_transform.py - Coordinate frame transformations.
 
 Frame conventions:
   World frame : BeamNG world XYZ
@@ -19,7 +19,7 @@ class CoordinateTransform:
     """
 
     # ------------------------------------------------------------------
-    # World → Vehicle
+    # World - Vehicle
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -32,7 +32,7 @@ class CoordinateTransform:
 
         Vehicle frame:
             X = right
-            Y = forward  (vehicle -Y body axis in world frame → vehicle Y here)
+            Y = forward  (vehicle -Y body axis in world frame - vehicle Y here)
             Z = up
 
         Steps:
@@ -44,10 +44,10 @@ class CoordinateTransform:
         R^T maps world vectors back to body vectors.
 
         In BeamNG the body axes are:
-            Body +X → right  (world R[:,0])
-            Body +Y → vehicle internal Y (sideways / up depending on model)
-            Body -Y → forward in many BeamNG vehicles
-            Body +Z → up
+            Body +X - right  (world R[:,0])
+            Body +Y - vehicle internal Y (sideways / up depending on model)
+            Body -Y - forward in many BeamNG vehicles
+            Body +Z - up
 
         We therefore apply one additional permutation to get our convention
         (X=right, Y=forward, Z=up).  The vehicle forward is body -Y, so
@@ -72,22 +72,16 @@ class CoordinateTransform:
         # Translate to vehicle-centric world coords
         pts_centered = points_world - pos  # (N, 3)
 
-        # Rotate to body frame: body = R^T @ world
-        pts_body = pts_centered @ R        # (N,3)  (equivalent to (R^T @ pts_centered^T)^T)
-
-        # Body frame has +X=right, +Y=vehicle internal (sideways toward front
-        # for BeamNG convention where forward = -Y body).
-        # Convert to our vehicle frame: X=right, Y=forward, Z=up
-        pts_vehicle = np.column_stack([
-            pts_body[:, 0],   # X = right  (body X)
-            -pts_body[:, 1],  # Y = forward (body -Y)
-            pts_body[:, 2],   # Z = up     (body Z)
-        ])
+        # Rotate to vehicle frame: vehicle = R^T @ centered
+        # R is body-to-world with columns [right, forward, up].
+        # R^T maps world vectors to body/vehicle frame directly.
+        # pts_centered @ R is equivalent to (R^T @ pts_centered^T)^T
+        pts_vehicle = pts_centered @ R        # (N,3): [X=right, Y=forward, Z=up]
 
         return pts_vehicle
 
     # ------------------------------------------------------------------
-    # Vehicle → World
+    # Vehicle - World
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -115,15 +109,9 @@ class CoordinateTransform:
         R = vehicle_state.rotation_matrix  # (3,3)
         pos = vehicle_state.pos            # (3,)
 
-        # Undo vehicle-frame convention flip: body_y = -vehicle_y
-        pts_body = np.column_stack([
-            points_vehicle[:, 0],   # body X = vehicle X
-            -points_vehicle[:, 1],  # body Y = -vehicle Y
-            points_vehicle[:, 2],   # body Z = vehicle Z
-        ])
-
-        # Rotate body → world: world = R @ body
-        pts_world_centered = pts_body @ R.T   # (N, 3)
+        # Rotate vehicle frame - world: world = R @ vehicle
+        # points_vehicle @ R.T is equivalent to (R @ points_vehicle^T)^T
+        pts_world_centered = points_vehicle @ R.T   # (N, 3)
 
         # Translate
         pts_world = pts_world_centered + pos
@@ -131,7 +119,7 @@ class CoordinateTransform:
         return pts_world
 
     # ------------------------------------------------------------------
-    # LiDAR → Vehicle  (convenience wrapper)
+    # LiDAR - Vehicle  (convenience wrapper)
     # ------------------------------------------------------------------
 
     @staticmethod

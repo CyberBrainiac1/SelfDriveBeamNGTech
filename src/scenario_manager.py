@@ -1,5 +1,5 @@
 """
-scenario_manager.py — Scenario lifecycle management.
+scenario_manager.py - Scenario lifecycle management.
 """
 
 import time

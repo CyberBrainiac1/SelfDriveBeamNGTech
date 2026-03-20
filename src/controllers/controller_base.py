@@ -1,5 +1,5 @@
 """
-controller_base.py — Abstract base class for lateral controllers.
+controller_base.py - Abstract base class for lateral controllers.
 """
 
 from abc import ABC, abstractmethod
