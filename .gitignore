@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 *.pyo
+output/logs/
+output/diagnostics/
 .env
 venv/
 .venv/
