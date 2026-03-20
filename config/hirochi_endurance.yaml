@@ -1,0 +1,194 @@
+beamng:
+  home: "C:\\Beamngtech\\BeamNG.tech.v0.38.3.0"
+  host: "localhost"
+  port: 64256
+  launch: true
+  user: null
+  hide_hud: true
+
+demo:
+  preset: "hirochi_endurance_demo"
+  mission_preset: null
+  mission_start_preference: null
+  mission_use_spawn: false
+  spawn_from_route_start: true
+  map: "hirochi_raceway"
+  vehicle_model: "etk800"
+  vehicle_id: "ego"
+  scenario_name: "selfdrive_hirochi_endurance"
+  spawn_pos: [-403.3516541, 245.7024078, 25.01779747]
+  spawn_rot_quat: [-0.0004999058387, 0.001664072897, 0.9577164294, 0.2877085708]
+  preferred_road_id: 23164
+  target_cruise_kph: 95.0
+
+route:
+  selection_strategy: "nearest"
+  min_route_length_m: 1800.0
+  min_p95_curvature: 0.0
+  max_p95_curvature: 0.0200
+  resample_spacing_m: 2.0
+  search_window: 220
+  search_radius_m: 400.0
+  local_horizon_m: 230.0
+  preview_distance_m: 160.0
+  curve_window_min_m: 18.0
+  curve_window_max_m: 70.0
+  lookahead_base_m: 14.0
+  lookahead_speed_gain: 0.62
+  lookahead_min_m: 14.0
+  lookahead_max_m: 55.0
+  late_apex_entry_bias: 0.10
+  late_apex_inside_bias: 0.07
+  exit_bias: 0.05
+
+controllers:
+  lateral: "pure_pursuit"
+  wheelbase_m: 2.72
+  steering_filter_alpha: 0.28
+  steering_rate_limit: 0.08
+  max_steer_rad: 0.60
+  pure_pursuit:
+    gain: 0.92
+  stanley:
+    gain: 1.10
+    softening_kph: 45.0
+  mpcc_inspired:
+    contour_gain: 2.6
+    lag_gain: 0.18
+    heading_gain: 0.95
+    feedforward_gain: 1.05
+    softening_kph: 32.0
+    path_point_spacing_m: 6.0
+    candidate_count: 9
+    max_offset_m: 1.8
+    contour_weight: 0.90
+    lag_weight: 0.18
+    smoothness_weight: 5.0
+    curvature_weight: 3.2
+    clearance_weight: 0.55
+    clearance_radius_m: 2.4
+  speed_pid:
+    kp: 0.14
+    ki: 0.010
+    kd: 0.04
+    coast_band_kph: 3.0
+    brake_kp: 0.12
+    brake_extra_gain: 0.18
+    strong_brake_delta_kph: 10.0
+    throttle_max: 0.86
+    brake_max: 1.0
+    throttle_rate_up: 0.12
+    throttle_rate_down: 0.30
+    brake_rate_up: 0.28
+    brake_rate_down: 0.30
+    steering_throttle_reduction: 0.58
+    trail_brake_steer: 0.30
+    straight_brake_steer: 0.05
+
+speed_planner:
+  min_speed_kph: 35.0
+  max_speed_kph: 120.0
+  max_lateral_accel_mps2: 4.9
+  curve_speed_safety: 0.82
+  corridor_slowdown_start: 0.62
+  corridor_slowdown_gain: 3.2
+  recovery_heading_deg: 8.0
+  recovery_cross_track_m: 1.2
+
+runtime:
+  deterministic_hz: 60
+  control_hz: 25.0
+  print_every_ticks: 10
+  max_runtime_seconds: 900.0
+  startup_delay_seconds: 0.5
+  allow_route_recycle: true
+  route_end_buffer_m: 180.0
+  recycle_pause_seconds: 0.4
+
+perception:
+  lidar:
+    enabled: true
+    requested_update_time_s: 0.05
+    pos: [0.0, 0.0, 1.7]
+    dir: [0.0, -1.0, 0.0]
+    up: [0.0, 0.0, 1.0]
+    vertical_resolution: 24
+    vertical_angle_deg: 18.0
+    frequency_hz: 20.0
+    horizontal_angle_deg: 120.0
+    max_distance_m: 120.0
+    density: 250.0
+    forward_filter_m: 130.0
+    lateral_filter_m: 25.0
+    min_height_m: -0.5
+    max_height_m: 4.0
+
+calibration:
+  enabled: true
+  use_roads_sensor_reference: true
+  warmup_samples: 18
+  min_quality: 0.42
+  point_count_target: 200
+  transform_error_scale_m: 0.05
+  width_stability_scale_m: 1.0
+  heading_stability_scale_deg: 7.0
+  startup_speed_cap_kph: 70.0
+  # Scale calibration: distance and angle accuracy correction
+  distance_calibration_alpha: 0.12   # EMA blend rate for scale factor updates
+  min_scale_samples: 8               # samples before trusting scale factors
+  max_scale_correction: 1.5          # cap on allowed scale factor deviation from 1.0
+
+geometry:
+  min_forward_m: 5.0
+  max_forward_m: 75.0
+  station_spacing_m: 4.5
+  min_point_count: 70
+  min_station_count: 5
+  min_side_points: 3
+  boundary_percentile: 14.0
+  boundary_buffer_m: 0.5
+  min_corridor_width_m: 4.0
+  max_corridor_width_m: 14.0
+  default_corridor_width_m: 7.5
+  fit_history_blend: 0.38
+  straight_curvature_threshold: 0.0016
+  slight_curvature_threshold: 0.0048
+  medium_curvature_threshold: 0.0105
+  tight_curvature_threshold: 0.0220
+  residual_confidence_scale_m: 1.0
+  width_confidence_scale_m: 0.9
+  temporal_confidence_scale: 0.7
+  curvature_trend_threshold: 0.0025
+
+probabilistic_control:
+  min_steering_commitment: 0.18
+  max_steering_commitment: 0.98
+  commitment_smoothing: 0.32
+  # Straight detection: when straight_prob × geometry_conf exceeds this, enter straight mode
+  straight_confidence_threshold: 0.55
+  straight_steering_relaxation: 0.42
+  cautious_speed_scale: 0.70
+  low_confidence_lookahead_scale: 0.74
+  high_confidence_lookahead_scale: 1.14
+  racing_line_bias_gain: 0.78
+  tightening_commitment_bonus: 0.14
+  tightening_speed_penalty: 0.18
+
+safety:
+  enable_autonomy_on_start: true
+  damage_grace_seconds: 20.0
+  max_damage: 250.0
+  max_speed_kph: 150.0
+  no_target_grace_ticks: 12
+  emergency_heading_error_deg: 45.0
+  emergency_cross_track_m: 5.0
+  clamp_steering: 1.0
+  clamp_throttle: 1.0
+  clamp_brake: 1.0
+
+logging:
+  level: "INFO"
+  log_dir: "output/logs"
+  diagnostics_dir: "output/diagnostics"
+  telemetry_csv_name: "selfdrive_latest.csv"
+  summary_json_name: "selfdrive_summary.json"

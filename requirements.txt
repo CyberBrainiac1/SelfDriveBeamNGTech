@@ -1,17 +1,9 @@
-# ── BeamNG.tech driver (default) ──────────────────────────────────
+# ── BeamNG.tech self-driving stack ────────────────────────────────────────
 beamngpy>=1.28
-opencv-python>=4.8
 numpy>=1.24
+scipy>=1.11
+PyYAML>=6.0
+opencv-python>=4.8
 
-# ── Legacy Assetto Corsa driver (optional — used with --ac flag) ───
-mss>=9.0
-
-# Neural network (optional — only needed for AC neural mode)
-tensorflow>=2.13.0
-
-# Analog control (optional — recommended for smooth AC driving)
-# Requires vJoy driver from https://github.com/jshafer817/vJoy/releases
-pyvjoy>=1.0.1
-
-# Testing
+# ── Testing ────────────────────────────────────────────────────────────────
 pytest>=7.0
